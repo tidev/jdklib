@@ -60,7 +60,7 @@ describe('detect', () => {
 			.then(results => {
 				expect(results).to.be.an.Object;
 				expect(results).to.have.keys('jdks', 'home');
-				expect(results.home).to.equal(null);
+				expect(results.home).to.not.equal(fakeJDKPath);
 				done();
 			})
 			.catch(err => done(err));
