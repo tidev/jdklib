@@ -1,7 +1,5 @@
 # JDK Utility Library
 
-jdklib supports Xcode 6 and newer.
-
 [![NPM Version][npm-image]][npm-url]
 [![NPM Downloads][downloads-image]][downloads-url]
 [![Travis CI Build][travis-image]][travis-url]
