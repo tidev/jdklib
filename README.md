@@ -21,8 +21,8 @@ import * as jdklib from 'jdklib';
 
 jdklib
     .detect()
-    .then(info => {
-        console.info(err);
+    .then(jdkInfo => {
+        console.info(jdkInfo);
     })
     .catch(err => console.error);
 ```
