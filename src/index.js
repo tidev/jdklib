@@ -1,7 +1,8 @@
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import which from 'which';
+import 'source-map-support/register';
 
 const isWindows = process.platform == 'win32';
 const homeRegExp = /^(~)([\\/].*)?$/;
@@ -94,13 +95,13 @@ function existsSync(it) {
  * @returns {String}
  */
 function resolveDir(dir) {
-	return path.resolve(dir)
-		.replace(homeRegExp, (match, tilde, dir) => {
+	return path.resolve(
+		dir.replace(homeRegExp, (match, tilde, dir) => {
 			return process.env[isWindows ? 'USERPROFILE' : 'HOME'] + (dir || path.sep);
-		})
-		.replace(winEnvVarRegExp, (match, token, name) => {
+		}).replace(winEnvVarRegExp, (match, token, name) => {
 			return isWindows && process.env[name] || token;
-		});
+		})
+	);
 }
 
 /**
@@ -122,6 +123,31 @@ function findExecutable(executable) {
 }
 
 /**
+ * Runs a specified command and returns the result.
+ *
+ * @param {String} cmd - The command to run.
+ * @param {Array} [args] - An array of arguments to pass into the command.
+ * @returns {Promise}
+ */
+function run(cmd, args) {
+	return new Promise((resolve, reject) => {
+		const child = spawn(cmd, args);
+		let stdout = '';
+		let stderr = '';
+
+		child.stdout.on('data', data => {
+			stdout += data.toString();
+		});
+
+		child.stderr.on('data', data => {
+			stderr += data.toString();
+		});
+
+		child.on('close', code => resolve({ code, stdout, stderr }));
+	});
+}
+
+/**
  * Determins if the specified directory contains a JDK and if so, returns the
  * JDK info.
  *
@@ -129,56 +155,57 @@ function findExecutable(executable) {
  * @returns {Promise}
  */
 function isJDK(dir) {
-	return new Promise((resolve, reject) => {
-		// if there's no libjvm, then it's not a JDK
-		const libjvms = libjvmLocations[process.platform];
-		if (!libjvms || !libjvms.some(p => existsSync(path.resolve(dir, p)))) {
-			return resolve();
+	// if there's no libjvm, then it's not a JDK
+	const libjvms = libjvmLocations[process.platform];
+	if (!libjvms || !libjvms.some(p => existsSync(path.resolve(dir, p)))) {
+		// no libjvm, not a JDK
+		return Promise.resolve();
+	}
+
+	let jdkInfo = {
+		path: dir,
+		version: null,
+		build: null,
+		architecture: null,
+		executables: {}
+	};
+
+	if (!executables.every(cmd => {
+		var p = path.join(dir, 'bin', cmd + exe);
+		if (existsSync(p)) {
+			jdkInfo.executables[cmd] = fs.realpathSync(p);
+			return true;
 		}
+	})) {
+		// missing key executables, not a JDK
+		return Promise.resolve();
+	}
 
-		const jdkInfo = {
-			path: dir,
-			version: null,
-			build: null,
-			architecture: null,
-			executables: {}
-		};
-
-		if (!executables.every(cmd => {
-			var p = path.join(dir, 'bin', cmd + exe);
-			if (existsSync(p)) {
-				jdkInfo.executables[cmd] = fs.realpathSync(p);
-				return true;
-			}
-		})) {
-			return resolve();
-		}
-
-		// try the 64-bit version first
-		exec(jdkInfo.executables.javac + ' -version -d64', (err, stdout, stderr) => {
-			if (err) {
-				// try the 32-bit version
-				exec(jdkInfo.executables.javac + ' -version', (err, stdout, stderr) => {
-					finalize(err ? null : stderr, '32bit');
-				});
-			} else {
+	// try the 64-bit version first
+	return run(jdkInfo.executables.javac, ['-version', '-d64'])
+		.then(({ code, stdout, stderr }) => {
+			if (!code) {
 				// 64-bit version
-				finalize(stderr, '64bit');
+				return { output: stderr, arch: '64bit' };
 			}
-		});
 
-		function finalize(str, arch) {
-			var m = str !== null && str.match(/javac (.+)_(.+)/);
-			if (m) {
+			// try the 32-bit version
+			return run(jdkInfo.executables.javac, ['-version'])
+				.then(({ code, stdout, stderr }) => {
+					return code ? null : { output: stderr, arch: '32bit' };
+				});
+		})
+		.then(details => {
+			if (details) {
+				const m = details.output.match(/javac (.+)_(.+)/);
 				jdkInfo.version = m[1];
 				jdkInfo.build = m[2];
-				jdkInfo.architecture = arch;
-				resolve(jdkInfo);
+				jdkInfo.architecture = details.arch;
 			} else {
-				resolve();
+				jdkInfo = null;
 			}
-		}
-	});
+		})
+		.then(() => jdkInfo);
 }
 
 /**
@@ -224,14 +251,12 @@ function findJDKsDarwin() {
 
 	return Promise
 		.all([
-			new Promise((resolve, reject) => {
-				exec('/usr/libexec/java_home', (err, stdout) => {
-					if (!err) {
+			run('/usr/libexec/java_home')
+				.then((code, stdout, stderr) => {
+					if (!code) {
 						jdkPaths[stdout.trim()] = 1;
 					}
-					resolve();
-				});
-			}),
+				}),
 
 			findExecutable('javac')
 				.then(file => jdkPaths[path.dirname(path.dirname(file))] = 1)
@@ -245,21 +270,33 @@ function findJDKsDarwin() {
  * @returns {Promise}
  */
 function findJDKsWin32() {
-	const jdkPaths = {};
+	const Winreg = require('winreg');
+
+	function searchWindowsRegistry(key) {
+		return new Promise((resolve, reject) => {
+			new Winreg({ hive: Winreg.HKLM, key })
+				.get('CurrentVersion', function (err, item) {
+					const currentVersion = !err && item.value;
+					if (!currentVersion) {
+						return resolve();
+					}
+
+					new Winreg({ hive: Winreg.HKLM, key: key + '\\' + currentVersion })
+						.get('JavaHome', function (err, item) {
+							if (!err && item.value) {
+								resolve(item.value);
+							} else {
+								resolve();
+							}
+						});
+				});
+		});
+	}
 
 	return Promise
-		.all(
-			['%SystemDrive%', '%ProgramFiles%', '%ProgramFiles(x86)%', '%ProgramW6432%', '~']
-				.map(dir => resolveDir(dir))
-				.map(dir => {
-					return new Promise((resolve, reject) => {
-						dir = resolveDir(dir);
-						if (existsSync(dir)) {
-							fs.readdirSync(dir).forEach(name => jdkPaths[path.join(dir, name)] = 1);
-						}
-						resolve();
-					});
-				})
-		)
-		.then(() => Object.keys(jdkPaths));
+		.all([
+			searchWindowsRegistry('\\Software\\JavaSoft\\Java Development Kit'),
+			searchWindowsRegistry('\\Software\\Wow6432Node\\JavaSoft\\Java Development Kit')
+		])
+		.then(paths => paths.filter(p => p));
 }

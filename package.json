@@ -1,6 +1,6 @@
 {
   "name": "jdklib",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "JDK Utility Library",
   "main": "./dist/index.js",
   "author": {
@@ -28,7 +28,8 @@
   },
   "dependencies": {
     "source-map-support": "^0.4.0",
-    "which": "^1.2.4"
+    "which": "^1.2.4",
+    "winreg": "^0.0.17"
   },
   "devDependencies": {
     "babel-eslint": "^5.0.0",
