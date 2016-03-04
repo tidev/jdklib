@@ -4,6 +4,7 @@ node_js:
   - "5"
 os:
   - linux
+  - osx
 sudo: false
 before_script:
   - sh -c "git log | head -12"
