@@ -79,9 +79,15 @@ export function detect(opts = {}) {
 		.then(() => results);
 }
 
-function existsSync(it) {
+/**
+ * Helper to check if a file exists and that it can be accessed.
+ *
+ * @param {String} file - The file to check.
+ * @returns {Boolean}
+ */
+function existsSync(file) {
 	try {
-		fs.accessSync(it);
+		fs.accessSync(file);
 		return true;
 	} catch (e) {
 		return false;
