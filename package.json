@@ -38,6 +38,7 @@
     "chai": "^3.5.0",
     "del": "^2.2.0",
     "esdoc-es7-plugin": "0.0.3",
+    "eslint": "2.2.0",
     "gulp": "^3.9.1",
     "gulp-babel": "^6.1.2",
     "gulp-babel-istanbul": "^1.0.0",
