@@ -45,7 +45,7 @@ describe('detect', () => {
 
 				done();
 			})
-			.catch(err => done(err));
+			.catch(done);
 	});
 
 	it('should cache previous results', function (done) {
@@ -63,7 +63,22 @@ describe('detect', () => {
 				expect(results.home).to.not.equal(fakeJDKPath);
 				done();
 			})
-			.catch(err => done(err));
+			.catch(done);
+	});
+
+	it('should queue up detect calls', function (done) {
+		this.timeout(5000);
+		this.slow(4000);
+
+		const fakeJDKPath = path.join(__dirname, 'fakejdk');
+
+		Promise
+			.all([
+				jdklib.detect({ bypassCache: true, javaHome: fakeJDKPath }),
+				jdklib.detect({ bypassCache: true, javaHome: fakeJDKPath })
+			])
+			.then(() => done())
+			.catch(done);
 	});
 
 	// our fake JDK only works on Linux and OS X :(
@@ -80,6 +95,6 @@ describe('detect', () => {
 				expect(results.home).to.equal(fakeJDKPath);
 				done();
 			})
-			.catch(err => done(err));
+			.catch(done);
 	});
 });

@@ -4,8 +4,8 @@ import path from 'path';
 import which from 'which';
 import 'source-map-support/register';
 
-const isWindows = process.platform == 'win32';
-const homeRegExp = /^(~)([\\/].*)?$/;
+const isWindows = process.platform === 'win32';
+const homeDirRegExp = /^~([\\|/].*)?$/;
 const winEnvVarRegExp = /(%([^%]*)%)/g;
 const exe = isWindows ? '.exe' : '';
 const executables = ['java', 'javac', 'keytool', 'jarsigner'];
@@ -30,7 +30,9 @@ const libjvmLocations = {
 	]
 };
 
-let cache = null;
+let detectCache = null;
+let detectPending = false;
+let detectRequests = [];
 
 /**
  * Detects installed JDKs.
@@ -41,18 +43,27 @@ let cache = null;
  * @returns {Promise}
  */
 export function detect(opts = {}) {
-	if (cache && !opts.bypassCache) {
-		return Promise.resolve(cache);
+	if (detectCache && !opts.bypassCache) {
+		return Promise.resolve(detectCache);
 	}
 
-	const results = cache = {
+	if (detectPending) {
+		return new Promise(resolve => {
+			detectRequests.push(resolve);
+		});
+	}
+
+	detectPending = true;
+
+	const results = {
+		home: null,
 		jdks: {}
 	};
 
 	// check the java home
 	let home = opts.javaHome || process.env.JAVA_HOME || null;
 	if (home) {
-		home = resolveDir(home);
+		home = expandPath(home);
 		if (!existsSync(home)) {
 			home = null;
 		}
@@ -76,6 +87,14 @@ export function detect(opts = {}) {
 					});
 			}));
 		})
+		.then(() => {
+			detectCache = results;
+			detectPending = false;
+			for (const resolve of detectRequests) {
+				resolve(results);
+			}
+			detectRequests = [];
+		})
 		.then(() => results);
 }
 
@@ -95,20 +114,20 @@ function existsSync(file) {
 }
 
 /**
- * Resolves the specified directory.
- *
- * @param {String} dir - The directory path to resolve.
+ * Resolves a path into an absolute path.
+ * @param {...String} segments - The path segments to join and resolve.
  * @returns {String}
  */
-function resolveDir(dir) {
-	return path.resolve(
-		dir.replace(homeRegExp, (match, tilde, dir) => {
-			return process.env[isWindows ? 'USERPROFILE' : 'HOME'] + (dir || path.sep);
-		}).replace(winEnvVarRegExp, (match, token, name) => {
-			return isWindows && process.env[name] || token;
-		})
-	);
+export function expandPath(...segments) {
+	segments[0] = segments[0].replace(homeDirRegExp, (process.env.HOME || process.env.USERPROFILE) + '$1');
+	if (process.platform === 'win32') {
+		return path.resolve(path.join.apply(null, segments).replace(winEnvVarRegExp, (s, m, n) => {
+			return process.env[n] || m;
+		}));
+	}
+	return path.resolve.apply(null, segments);
 }
+
 
 /**
  * Wraps `which()` with a promise.

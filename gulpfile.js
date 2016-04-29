@@ -15,22 +15,16 @@ const docsDir = path.join(__dirname, 'docs');
  */
 gulp.task('clean', ['clean-coverage', 'clean-dist', 'clean-docs']);
 
-gulp.task('clean-coverage', function (done) {
-	del([coverageDir]).then(function () { done(); });
-});
+gulp.task('clean-coverage', done => { del([coverageDir]).then(() => done()) });
 
-gulp.task('clean-dist', function (done) {
-	del([distDir]).then(function () { done(); });
-});
+gulp.task('clean-dist', done => { del([distDir]).then(() => done()) });
 
-gulp.task('clean-docs', function (done) {
-	del([docsDir]).then(function () { done(); });
-});
+gulp.task('clean-docs', done => { del([docsDir]).then(() => done()) });
 
 /*
  * build tasks
  */
-gulp.task('build', ['clean-dist', 'lint-src'], function () {
+gulp.task('build', ['clean-dist', 'lint-src'], () => {
 	return gulp
 		.src('src/**/*.js')
 		.pipe($.plumber())
@@ -41,7 +35,7 @@ gulp.task('build', ['clean-dist', 'lint-src'], function () {
 		.pipe(gulp.dest(distDir));
 });
 
-gulp.task('docs', ['lint-src', 'clean-docs'], function () {
+gulp.task('docs', ['lint-src', 'clean-docs'], () => {
 	return gulp.src('src')
 		.pipe($.plumber())
 		.pipe($.debug({ title: 'docs' }))
@@ -66,26 +60,33 @@ function lint(pattern) {
 		.pipe($.eslint.failAfterError());
 }
 
-gulp.task('lint-src', function () {
-	return lint('src/**/*.js');
-});
+gulp.task('lint-src', () => lint('src/**/*.js'));
 
-gulp.task('lint-test', function () {
-	return lint('test/**/test-*.js');
-});
+gulp.task('lint-test', () => lint('test/**/test-*.js'));
 
 /*
  * test tasks
  */
-gulp.task('test', ['lint-src', 'lint-test'], function () {
+gulp.task('test', ['lint-src', 'lint-test'], () => {
+	let suite;
+	let grep;
+	let p = process.argv.indexOf('--suite');
+	if (p !== -1 && p + 1 < process.argv.length) {
+		suite = process.argv[p + 1];
+	}
+	p = process.argv.indexOf('--grep');
+	if (p !== -1 && p + 1 < process.argv.length) {
+		grep = process.argv[p + 1];
+	}
+
 	return gulp.src(['src/**/*.js', 'test/**/*.js'])
 		.pipe($.plumber())
 		.pipe($.debug({ title: 'build' }))
 		.pipe($.babel())
 		.pipe($.injectModules())
-		.pipe($.filter('test/**/*.js'))
+		.pipe($.filter(suite ? ['test/setup.js'].concat(suite.split(',').map(s => 'test/**/test-' + s + '.js')) : 'test/**/*.js'))
 		.pipe($.debug({ title: 'test' }))
-		.pipe($.mocha());
+		.pipe($.mocha({ grep: grep }));
 });
 
 gulp.task('coverage', ['lint-src', 'lint-test', 'clean-coverage'], function (cb) {
