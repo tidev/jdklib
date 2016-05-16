@@ -1,66 +1,139 @@
-import * as jdklib from '../src/index';
+import _ from 'lodash';
+import del from 'del';
 import { expect } from 'chai';
-import fs from 'fs';
+import fs from 'fs-extra';
+import { GawkObject } from 'gawk';
+import * as jdklib from '../src/index';
 import path from 'path';
+import temp from 'temp';
 
-const isWindows = process.platform === 'win32';
+const isWindows = /^win/.test(process.platform);
 
-describe('detect', () => {
-	it('should detect installed JDKs', function (done) {
-		this.timeout(5000);
-		this.slow(4000);
+temp.track();
 
-		jdklib.detect()
+function validateJDKs(results, versions) {
+	expect(results).to.be.an.Object;
+
+	for (const id of Object.keys(results)) {
+		if (Array.isArray(versions)) {
+			expect(id).to.equal(versions.shift());
+		}
+		const jdk = results[id];
+		expect(jdk).to.be.an.Object;
+		expect(jdk).to.have.keys('path', 'version', 'build', 'architecture', 'executables');
+		expect(jdk.path).to.be.a.String;
+		expect(jdk.path).to.not.equal('');
+		expect(() => fs.statSync(jdk.path)).to.not.throw(Error);
+		expect(jdk.version).to.be.a.String;
+		expect(jdk.version).to.not.equal('');
+		expect(jdk.build).to.be.a.String;
+		expect(jdk.build).to.not.equal('');
+		expect(id).to.equal(jdk.version + '_' + jdk.build);
+		expect(jdk.architecture).to.be.a.String;
+		expect(jdk.architecture).to.be.oneOf(['32bit', '64bit']);
+		expect(jdk.executables).to.be.an.Object;
+		for (const name of Object.keys(jdk.executables)) {
+			expect(jdk.executables[name]).to.be.a.String;
+			expect(jdk.executables[name]).to.not.equal('');
+			expect(() => fs.statSync(jdk.executables[name])).to.not.throw(Error);
+		}
+	}
+}
+
+describe('detect()', () => {
+	beforeEach(function () {
+		this.JAVA_HOME = process.env.JAVA_HOME;
+		this.PATH = process.env.PATH;
+
+		process.env.JAVA_HOME = '';
+		process.env.PATH = '';
+	});
+
+	afterEach(function () {
+		process.env.JAVA_HOME = this.JAVA_HOME;
+		process.env.PATH = this.PATH;
+	});
+
+	it('should detect JDK using defaults', done => {
+		jdklib
+			.detect({
+				force: true
+			})
 			.then(results => {
-				expect(results).to.be.an.Object;
-				expect(results).to.have.keys('jdks', 'home');
-
-				expect(results.jdks).to.be.an.Object;
-				Object.keys(results.jdks).forEach(id => {
-					const jdk = results.jdks[id];
-					expect(jdk).to.be.an.Object;
-					expect(jdk).to.have.keys('path', 'version', 'build', 'architecture', 'executables');
-					expect(jdk.path).to.be.a.String;
-					expect(jdk.path).to.not.equal('');
-					expect(() => fs.statSync(jdk.path)).to.not.throw(Error);
-					expect(jdk.version).to.be.a.String;
-					expect(jdk.version).to.not.equal('');
-					expect(jdk.build).to.be.a.String;
-					expect(jdk.build).to.not.equal('');
-					expect(id).to.equal(jdk.version + '_' + jdk.build);
-					expect(jdk.architecture).to.be.a.String;
-					expect(jdk.architecture).to.be.oneOf(['32bit', '64bit']);
-					expect(jdk.executables).to.be.an.Object;
-					Object.keys(jdk.executables).forEach(name => {
-						expect(jdk.executables[name]).to.be.a.String;
-						expect(jdk.executables[name]).to.not.equal('');
-						expect(() => fs.statSync(jdk.executables[name])).to.not.throw(Error);
-					});
-				});
-
-				if (results.home !== null) {
-					expect(results.home).to.be.a.String;
-					expect(results.home).to.not.equal('');
-				}
-
+				validateJDKs(results);
 				done();
 			})
 			.catch(done);
 	});
 
-	it('should cache previous results', function (done) {
-		this.timeout(5000);
-		this.slow(4000);
-
-		const fakeJDKPath = path.join(__dirname, 'fakejdk');
-
-		// because this is the second test, the results are already cached from
-		// the previous test and thus `home` will not equal the fake JDK path
-		jdklib.detect({ javaHome: fakeJDKPath })
+	it('should detect JDK using mock JDK', done => {
+		jdklib
+			.detect({
+				force: true,
+				ignorePlatformPaths: true,
+				jdkPaths: [
+					path.join(__dirname, 'mocks', 'jdk-1.8')
+				]
+			})
 			.then(results => {
-				expect(results).to.be.an.Object;
-				expect(results).to.have.keys('jdks', 'home');
-				expect(results.home).to.not.equal(fakeJDKPath);
+				validateJDKs(results, ['1.8.0_92']);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should detect JDK using mock JDKs', done => {
+		jdklib
+			.detect({
+				force: true,
+				ignorePlatformPaths: true,
+				jdkPaths: [
+					path.join(__dirname, 'mocks')
+				]
+			})
+			.then(results => {
+				validateJDKs(results, ['1.6.0_45', '1.7.0_80', '1.8.0_92']);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should not re-detect after initial detect', function (done) {
+		const tmp = temp.mkdirSync('jdklib-');
+		const opts = {
+			force: true,
+			ignorePlatformPaths: true,
+			jdkPaths: [
+				path.join(__dirname, 'mocks', 'jdk-1.8'),
+				tmp
+			]
+		};
+
+		// run the initial detect
+		jdklib
+			.detect(opts)
+			.then(results => {
+				validateJDKs(results, ['1.8.0_92']);
+			})
+			.then(() => {
+				// run detect again, but this time we do not force re-detect and
+				// we copy JDK 1.7 into the tmp dir so that there should be 2
+				// detected JDKs, but since we're not forcing, it's returning
+				// the cached results
+				opts.force = false;
+				fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), tmp);
+				return jdklib.detect(opts);
+			})
+			.then(results => {
+				validateJDKs(results, ['1.8.0_92']);
+			})
+			.then(() => {
+				// force re-detect again to find the JDK 1.7 we copied
+				opts.force = true;
+				return jdklib.detect(opts);
+			})
+			.then(results => {
+				validateJDKs(results, ['1.8.0_92', '1.7.0_80']);
 				done();
 			})
 			.catch(done);
@@ -70,31 +143,152 @@ describe('detect', () => {
 		this.timeout(5000);
 		this.slow(4000);
 
-		const fakeJDKPath = path.join(__dirname, 'fakejdk');
+		const opts = {
+			force: true,
+			ignorePlatformPaths: true,
+			jdkPaths: [
+				path.join(__dirname, 'mocks', 'jdk-1.8')
+			]
+		};
 
 		Promise
 			.all([
-				jdklib.detect({ bypassCache: true, javaHome: fakeJDKPath }),
-				jdklib.detect({ bypassCache: true, javaHome: fakeJDKPath })
+				jdklib.detect(opts),
+				jdklib.detect(opts)
 			])
-			.then(() => done())
-			.catch(done);
-	});
-
-	// our fake JDK only works on Linux and OS X :(
-	(isWindows ? it.skip : it)('should find a JDK in the java home', function (done) {
-		this.timeout(5000);
-		this.slow(4000);
-
-		const fakeJDKPath = path.join(__dirname, 'fakejdk');
-
-		jdklib.detect({ bypassCache: true, javaHome: fakeJDKPath })
 			.then(results => {
-				expect(results).to.be.an.Object;
-				expect(results).to.have.keys('jdks', 'home');
-				expect(results.home).to.equal(fakeJDKPath);
+				expect(results).to.be.an.Array;
+				expect(results).to.have.lengthOf(2);
+				expect(results[0]).to.deep.equal(results[1]);
 				done();
 			})
 			.catch(done);
+	});
+
+	it('should return gawk object and update with changes', done => {
+		const opts = {
+			force: true,
+			gawk: true,
+			ignorePlatformPaths: true,
+			jdkPaths: [
+				path.join(__dirname, 'mocks', 'jdk-1.8')
+			]
+		};
+		let counter = 0;
+
+		function checkDone(err) {
+			if (err || ++counter === 2) {
+				done(err);
+			}
+		}
+
+		jdklib
+			.detect(opts)
+			.then(results => {
+				expect(results).to.be.instanceof(GawkObject);
+				expect(results.keys()).to.deep.equal(['1.8.0_92']);
+
+				const unwatch = results.watch(_.debounce(evt => {
+					try {
+						unwatch();
+						const src = evt.source;
+						expect(src).to.be.instanceof(GawkObject);
+						expect(src.keys()).to.deep.equal(['1.7.0_80']);
+						checkDone();
+					} catch (err) {
+						checkDone(err);
+					}
+				}));
+			})
+			.then(() => {
+				opts.jdkPaths = [
+					path.join(__dirname, 'mocks', 'jdk-1.7')
+				];
+				return jdklib.detect(opts);
+			})
+			.then(results => {
+				expect(results).to.be.instanceof(GawkObject);
+				expect(results.keys()).to.deep.equal(['1.7.0_80']);
+				checkDone();
+			})
+			.catch(checkDone);
+	});
+});
+
+describe('watch()', () => {
+	beforeEach(function () {
+		this.watcher = null;
+	});
+
+	afterEach(function () {
+		if (this.watcher) {
+			this.watcher.stop();
+		}
+	});
+
+	it('should watch directory for JDK to be added', function (done) {
+		this.timeout(10000);
+		this.slow(5000);
+
+		const tmp = temp.mkdirSync('jdklib-');
+		const opts = {
+			force: true,
+			ignorePlatformPaths: true,
+			jdkPaths: [
+				path.join(__dirname, 'mocks', 'jdk-1.8'),
+				tmp
+			]
+		};
+
+		let count = 0;
+
+		this.watcher = jdklib
+			.watch(opts)
+			.on('results', results => {
+				count++;
+				if (count === 1) {
+					validateJDKs(results, ['1.8.0_92']);
+					fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), tmp);
+				} else if (count === 2) {
+					validateJDKs(results, ['1.8.0_92', '1.7.0_80']);
+					this.watcher.stop();
+					done();
+				}
+			})
+			.on('error', done);
+	});
+
+	it('should watch directory for JDK to be deleted', function (done) {
+		this.timeout(10000);
+		this.slow(5000);
+
+		const tmp = temp.mkdirSync('jdklib-');
+		const opts = {
+			force: true,
+			ignorePlatformPaths: true,
+			jdkPaths: [
+				path.join(__dirname, 'mocks', 'jdk-1.8'),
+				tmp
+			]
+		};
+
+		fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), tmp);
+
+		let count = 0;
+
+		this.watcher = jdklib
+			.watch(opts)
+			.on('results', results => {
+				count++;
+				if (count === 1) {
+					validateJDKs(results, ['1.8.0_92', '1.7.0_80']);
+					del(tmp, { force: true });
+				} else if (count === 2) {
+					validateJDKs(results, ['1.8.0_92']);
+					this.watcher.stop();
+					done();
+				}
+			})
+			.on('error', done);
 	});
 });

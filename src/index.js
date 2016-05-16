@@ -1,14 +1,24 @@
-import { spawn } from 'child_process';
+import _ from 'lodash';
+import appc from 'node-appc';
+import { EventEmitter } from 'events';
 import fs from 'fs';
+import { GawkObject } from 'gawk';
 import path from 'path';
-import which from 'which';
 import 'source-map-support/register';
 
-const isWindows = process.platform === 'win32';
-const homeDirRegExp = /^~([\\|/].*)?$/;
-const winEnvVarRegExp = /(%([^%]*)%)/g;
-const exe = isWindows ? '.exe' : '';
-const executables = ['java', 'javac', 'keytool', 'jarsigner'];
+const exe = appc.subprocess.exe;
+
+/**
+ * A list of requird executables used to determine if a directory is a JDK.
+ * @type {Array}
+ */
+const requiredExecutables = ['java' + exe, 'javac' + exe, 'keytool' + exe, 'jarsigner' + exe];
+
+/**
+ * Common search paths for the JVM library. This is used only for validating if
+ * a directory is a JDK.
+ * @type {Object}
+ */
 const libjvmLocations = {
 	linux: [
 		'lib/amd64/client/libjvm.so',
@@ -30,160 +40,203 @@ const libjvmLocations = {
 	]
 };
 
-let detectCache = null;
-let detectPending = false;
-let detectRequests = [];
+/**
+ * An object containing the results.
+ * @type {GawkObject}
+ */
+let results = null;
+
+/**
+ * An sorted array of resolved paths from the last time detection was performed.
+ * If the jdkPaths changes between detect calls, then we need to re-detect.
+ * @type {Array}
+ */
+let jdkPaths = null;
+
+/**
+ * A list of all static paths to check for a JDK. Static paths are those that
+ * are derived from the system PATH which cannot change once the app starts.
+ * @type {Array}
+ */
+let staticJDKPaths = null;
 
 /**
  * Detects installed JDKs.
  *
  * @param {Object} [opts] - An object with various params.
- * @param {Boolean} [opts.bypassCache=false] - When true, forces scan for all JDKs.
- * @param {String} [opts.javaHome] - Path to a known Java home.
+ * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
+ * well known platform specific paths.
+ * @param {Array} [opts.jdkPaths] - One or more paths to known JDKs.
+ * @param {Boolan} [opts.gawk] - If true, returns the raw internal Gawk object,
+ * otherwise returns a JavaScript object.
  * @returns {Promise}
  */
 export function detect(opts = {}) {
-	if (detectCache && !opts.bypassCache) {
-		return Promise.resolve(detectCache);
+	return Promise.resolve()
+		.then(() => getJDKPaths(opts.jdkPaths, opts.ignorePlatformPaths))
+		.then(paths => {
+			if (opts.force || results === null || jdkPaths === null || (jdkPaths < paths || jdkPaths > paths)) {
+				jdkPaths = paths;
+				return doDetect(paths);
+			}
+		})
+		.then(() => opts.gawk ? results : results.toJS());
+}
+
+/**
+ * A handle returned when calling `watch()`. This object exposes a `stop()`
+ * method to unwatch all paths specified in the `jdkPaths` parameter.
+ *
+ * This is not a public class. It should only be instantiated by the `watch()`
+ * method.
+ *
+ * @emits {results} Emits the detection results.
+ * @emits {error} Emitted when an error occurs.
+ */
+class Watcher extends EventEmitter {
+	/**
+	 * Initializes the Watcher instance.
+	 */
+	constructor() {
+		super();
+		this.unwatchers = [];
 	}
 
-	if (detectPending) {
-		return new Promise(resolve => {
-			detectRequests.push(resolve);
-		});
-	}
-
-	detectPending = true;
-
-	const results = {
-		home: null,
-		jdks: {}
-	};
-
-	// check the java home
-	let home = opts.javaHome || process.env.JAVA_HOME || null;
-	if (home) {
-		home = expandPath(home);
-		if (!existsSync(home)) {
-			home = null;
+	/**
+	 * Stops all active watchers associated with this handle.
+	 */
+	stop() {
+		let unwatch;
+		while (unwatch = this.unwatchers.shift()) {
+			unwatch();
 		}
 	}
-	results.home = home;
+}
 
-	return Promise.resolve()
-		.then(detectJDKPaths)
-		.then(jdkPaths => {
-			// add the java home to the array of paths to check
-			if (home && jdkPaths.indexOf(home) === -1) {
-				jdkPaths.unshift(home);
+/**
+ * Detects installed JDKs and watches for changes.
+ *
+ * @param {Object} [opts] - An object with various params.
+ * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
+ * well known platform specific paths.
+ * @param {Array} [opts.jdkPaths] - One or more paths to known JDKs.
+ * @param {Boolan} [opts.gawk] - If true, returns the raw internal Gawk object,
+ * otherwise returns a JavaScript object.
+ * @returns {Promise}
+ */
+export function watch(opts = {}) {
+	const handle = new Watcher;
+	let paths;
+
+	Promise.resolve()
+		.then(() => getJDKPaths(opts.jdkPaths, opts.ignorePlatformPaths))
+		.then(p => {
+			paths = p;
+			if (opts.force || results === null || jdkPaths === null || (jdkPaths < paths || jdkPaths > paths)) {
+				jdkPaths = paths;
+				return doDetect(paths);
 			}
-
-			return Promise.all(jdkPaths.map(p => {
-				return isJDK(p)
-					.then(jdkInfo => {
-						if (jdkInfo) {
-							results.jdks[jdkInfo.version + '_' + jdkInfo.build] = jdkInfo;
-						}
-					});
-			}));
 		})
 		.then(() => {
-			detectCache = results;
-			detectPending = false;
-			for (const resolve of detectRequests) {
-				resolve(results);
+			for (const dir of paths) {
+				handle.unwatchers.push(appc.fs.watch(dir, _.debounce(evt => {
+					doDetect(paths)
+						.then(() => handle.emit('results', opts.gawk ? results : results.toJS()));
+				})));
 			}
-			detectRequests = [];
+
+			handle.emit('results', opts.gawk ? results : results.toJS());
 		})
-		.then(() => results);
+		.catch(err => {
+			handle.stop();
+			handle.emit('error', err);
+		});
+
+	return handle;
 }
 
 /**
- * Helper to check if a file exists and that it can be accessed.
+ * Checks one or more paths for a JDK.
  *
- * @param {String} file - The file to check.
- * @returns {Boolean}
- */
-function existsSync(file) {
-	try {
-		fs.accessSync(file);
-		return true;
-	} catch (e) {
-		return false;
-	}
-}
-
-/**
- * Resolves a path into an absolute path.
- * @param {...String} segments - The path segments to join and resolve.
- * @returns {String}
- */
-export function expandPath(...segments) {
-	segments[0] = segments[0].replace(homeDirRegExp, (process.env.HOME || process.env.USERPROFILE) + '$1');
-	if (process.platform === 'win32') {
-		return path.resolve(path.join.apply(null, segments).replace(winEnvVarRegExp, (s, m, n) => {
-			return process.env[n] || m;
-		}));
-	}
-	return path.resolve.apply(null, segments);
-}
-
-
-/**
- * Wraps `which()` with a promise.
- *
- * @param {String} executable - The executable to find.
+ * @param {Array} paths - One or more paths to check.
  * @returns {Promise}
  */
-function findExecutable(executable) {
-	return new Promise((resolve, reject) => {
-		which(executable, function (err, file) {
-			if (err) {
-				reject(err);
-			} else {
-				resolve(file);
+function doDetect(paths) {
+	const jdks = [];
+
+	if (results === null) {
+		results = new GawkObject;
+	}
+
+	return Promise
+		.all(paths.map(dir => appc.util.mutex(dir, () => new Promise((resolve, reject) => {
+			Promise.resolve()
+				.then(() => {
+					return new Promise((resolve, reject) => {
+						if (!appc.fs.existsSync(dir)) {
+							return resolve();
+						}
+
+						isJDK(dir)
+							.then(jdk => jdk || Promise.all(fs.readdirSync(dir).map(name => isJDK(path.join(dir, name)))))
+							.then(resolve);
+					});
+				})
+				.then(found => {
+					if (!Array.isArray(found)) {
+						found = [found];
+					}
+					for (const jdk of found) {
+						jdk && jdks.push(jdk);
+					}
+				})
+				.then(resolve)
+				.catch(resolve);
+		}))))
+		.then(() => {
+			const deleted = results.keys();
+
+			for (const jdk of jdks) {
+				const key = jdk.version + '_' + jdk.build;
+				delete deleted[key];
 			}
+
+			for (const key of deleted) {
+				results.delete(key);
+			}
+
+			for (const jdk of jdks) {
+				const key = jdk.version + '_' + jdk.build;
+				if (results.has(key)) {
+					results.get(key).mergeDeep(jdk);
+				} else {
+					results.set(key, jdk);
+				}
+			}
+
+			return results;
 		});
-	});
 }
 
 /**
- * Runs a specified command and returns the result.
- *
- * @param {String} cmd - The command to run.
- * @param {Array} [args] - An array of arguments to pass into the command.
- * @returns {Promise}
- */
-function run(cmd, args) {
-	return new Promise((resolve, reject) => {
-		const child = spawn(cmd, args);
-		let stdout = '';
-		let stderr = '';
-
-		child.stdout.on('data', data => {
-			stdout += data.toString();
-		});
-
-		child.stderr.on('data', data => {
-			stderr += data.toString();
-		});
-
-		child.on('close', code => resolve({ code, stdout, stderr }));
-	});
-}
-
-/**
- * Determins if the specified directory contains a JDK and if so, returns the
+ * Determines if the specified directory contains a JDK and if so, returns the
  * JDK info.
  *
  * @param {String} dir - The directory to check.
  * @returns {Promise}
  */
 function isJDK(dir) {
-	// if there's no libjvm, then it's not a JDK
+	// on OS X, the JDK lives in Contents/Home
+	if (process.platform === 'darwin') {
+		const p = path.join(dir, 'Contents', 'Home');
+		if (appc.fs.existsSync(p)) {
+			dir = p;
+		}
+	}
+
 	const libjvms = libjvmLocations[process.platform];
-	if (!libjvms || !libjvms.some(p => existsSync(path.resolve(dir, p)))) {
-		// no libjvm, not a JDK
+	if (!libjvms || !libjvms.some(p => appc.fs.existsSync(path.resolve(dir, p)))) {
+		// if there's no libjvm, then it's not a JDK
 		return Promise.resolve();
 	}
 
@@ -195,9 +248,9 @@ function isJDK(dir) {
 		executables: {}
 	};
 
-	if (!executables.every(cmd => {
-		var p = path.join(dir, 'bin', cmd + exe);
-		if (existsSync(p)) {
+	if (!requiredExecutables.every(cmd => {
+		var p = path.join(dir, 'bin', cmd);
+		if (appc.fs.existsSync(p)) {
 			jdkInfo.executables[cmd] = fs.realpathSync(p);
 			return true;
 		}
@@ -206,16 +259,18 @@ function isJDK(dir) {
 		return Promise.resolve();
 	}
 
-	// try the 64-bit version first
-	return run(jdkInfo.executables.javac, ['-version', '-d64'])
-		.then(({ code, stdout, stderr }) => {
-			if (!code) {
-				// 64-bit version
-				return { output: stderr, arch: '64bit' };
-			}
-
+	return Promise.resolve()
+		.then(() => {
+			// try the 64-bit version first
+			return appc.subprocess.run(jdkInfo.executables.javac, ['-version', '-d64'])
+				.then(({ code, stdout, stderr }) => {
+					// 64-bit version
+					return { output: stderr, arch: '64bit' };
+				});
+		})
+		.catch(err => {
 			// try the 32-bit version
-			return run(jdkInfo.executables.javac, ['-version'])
+			return appc.subprocess.run(jdkInfo.executables.javac, ['-version'])
 				.then(({ code, stdout, stderr }) => {
 					return code ? null : { output: stderr, arch: '32bit' };
 				});
@@ -230,71 +285,158 @@ function isJDK(dir) {
 				jdkInfo = null;
 			}
 		})
-		.then(() => jdkInfo);
+		.then(() => jdkInfo)
+		.catch(err => Promise.resolve());
 }
 
 /**
- * Runs platform specific JDK scanning.
- *
- * @returns {Promise}
+ * Populates the list of static JDK paths based on the JAVA_HOME and system PATH
+ * environment variables. These are static because they cannot change once the
+ * app is started.
  */
-function detectJDKPaths() {
-	switch (process.platform) {
-		case 'linux':
-			return findJDKsLinux();
-		case 'darwin':
-			return findJDKsDarwin();
-		case 'win32':
-			return findJDKsWin32();
-	}
-	return Promise.resolve([]);
-}
-
-/**
- * Scans paths for installed JDKs.
- *
- * @returns {Promise}
- */
-function findJDKsLinux() {
-	return findExecutable('javac')
-		.then(file => [ path.dirname(path.dirname(file)) ]);
-}
-
-/**
- * Scans paths for installed JDKs.
- *
- * @returns {Promise}
- */
-function findJDKsDarwin() {
-	const jdkPaths = {};
-
-	['/Library/Java/JavaVirtualMachines', '/System/Library/Java/JavaVirtualMachines'].forEach(parent => {
-		existsSync(parent) && fs.readdirSync(parent).forEach(name => {
-			jdkPaths[path.join(parent, name, 'Contents', 'Home')] = 1;
-		});
-	});
+function getStaticJDKPaths() {
+	staticJDKPaths = [];
 
 	return Promise
 		.all([
-			run('/usr/libexec/java_home')
-				.then((code, stdout, stderr) => {
-					if (!code) {
-						jdkPaths[stdout.trim()] = 1;
+			appc.subprocess.which('javac')
+				.then(file => {
+					const path = path.dirname(path.dirname(fs.realpathSync(file)));
+					if (!staticJDKPaths.includes(path)) {
+						staticJDKPaths.push(path);
 					}
-				}),
+				})
+				.catch(() => Promise.resolve()),
 
-			findExecutable('javac')
-				.then(file => jdkPaths[path.dirname(path.dirname(file))] = 1)
-		])
-		.then(() => Object.keys(jdkPaths));
+			new Promise((resolve, reject) => {
+				const javaHome = process.env.JAVA_HOME;
+				if (!javaHome) {
+					return resolve();
+				}
+
+				fs.stat(javaHome, (err, stat) => {
+					if (err || !stat.isDirectory()) {
+						return resolve();
+					}
+
+					fs.realpath(javaHome, (err, path) => {
+						if (!err) {
+							if (!staticJDKPaths.includes(path)) {
+								staticJDKPaths.push(path);
+							}
+						}
+						resolve();
+					});
+				});
+			})
+		]);
 }
 
 /**
- * Scans paths for installed JDKs.
+ * Retrieves an array of platform specific paths to search.
+ *
+ * @param {Array} jdkPaths - An array containing paths to search for JDKs.
+ * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
+ * well known platform specific paths.
+ * @returns {Promise}
+ */
+function getJDKPaths(jdkPaths, ignorePlatformPaths) {
+	const paths = [];
+
+	return Promise.resolve()
+		.then(() => {
+			if (!ignorePlatformPaths) {
+				return Promise.resolve()
+					// 1. first get the static paths
+					.then(() => {
+						if (!staticJDKPaths) {
+							return getStaticJDKPaths();
+						}
+					})
+					.then(() => {
+						paths.push.apply(paths, staticJDKPaths);
+					})
+
+					// 2. add the platform specific paths
+					.then(() => {
+						if (!ignorePlatformPaths) {
+							switch (process.platform) {
+								case 'linux':  return findLinuxSearchPaths();
+								case 'darwin': return findDarwinSearchPaths();
+								case 'win32':  return findWindowsSearchPaths();
+							}
+						}
+						return [];
+					})
+					.then(platformPaths => paths.push.apply(paths, platformPaths));
+			}
+		})
+
+		// 3. add the jdk paths that were passed in
+		.then(() => {
+			if (jdkPaths && !Array.isArray(jdkPaths)) {
+				throw new TypeError('Expected jdkPaths to be an array of strings');
+			} else if (!jdkPaths || jdkPaths.length === 0) {
+				return;
+			}
+
+			return Promise
+				.all(jdkPaths.map(p => new Promise((resolve, reject) => {
+					if (typeof p !== 'string' || !p) {
+						return reject(new Error('Invalid path in jdkPaths: ' + p));
+					}
+
+					fs.stat(p, (err, stat) => {
+						if (err) {
+							// path does not exist, but maybe it will
+							return resolve(p);
+						}
+
+						if (!stat.isDirectory()) {
+							// path doesn't exist or not a directory, move along
+							return resolve();
+						}
+
+						// path exists, get the real path before we add it
+						fs.realpath(p, (err, dir) => resolve(err ? null : dir));
+					});
+				})))
+				.then(jdkPaths => paths.push.apply(paths, jdkPaths));
+		})
+
+		// 4. clean up the list of paths
+		.then(() => appc.util.unique(paths).sort());
+}
+
+/**
+ * Returns an array of well known JDK paths on Linux.
  *
  * @returns {Promise}
  */
-function findJDKsWin32() {
+function findLinuxSearchPaths() {
+	return Promise.resolve([
+		'/usr/lib/jvm'
+	]);
+}
+
+/**
+* Returns an array of well known JDK paths on OS X.
+ *
+ * @returns {Promise}
+ */
+function findDarwinSearchPaths() {
+	return Promise.resolve([
+		'/Library/Java/JavaVirtualMachines',
+		'/System/Library/Java/JavaVirtualMachines'
+	]);
+}
+
+/**
+ * Returns an array of well known JDK paths on Windows.
+ *
+ * @returns {Promise}
+ */
+function findWindowsSearchPaths() {
 	const Winreg = require('winreg');
 
 	function searchWindowsRegistry(key) {
@@ -318,10 +460,8 @@ function findJDKsWin32() {
 		});
 	}
 
-	return Promise
-		.all([
-			searchWindowsRegistry('\\Software\\JavaSoft\\Java Development Kit'),
-			searchWindowsRegistry('\\Software\\Wow6432Node\\JavaSoft\\Java Development Kit')
-		])
-		.then(paths => paths.filter(p => p));
+	return Promise.all([
+		searchWindowsRegistry('\\Software\\JavaSoft\\Java Development Kit'),
+		searchWindowsRegistry('\\Software\\Wow6432Node\\JavaSoft\\Java Development Kit')
+	]);
 }
