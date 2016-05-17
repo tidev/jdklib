@@ -41,17 +41,10 @@ const libjvmLocations = {
 };
 
 /**
- * An object containing the results.
- * @type {GawkObject}
+ * An object containing GawkObject results.
+ * @type {Object}
  */
-let results = null;
-
-/**
- * An sorted array of resolved paths from the last time detection was performed.
- * If the jdkPaths changes between detect calls, then we need to re-detect.
- * @type {Array}
- */
-let jdkPaths = null;
+let cache = {};
 
 /**
  * A list of all static paths to check for a JDK. Static paths are those that
@@ -74,13 +67,8 @@ let staticJDKPaths = null;
 export function detect(opts = {}) {
 	return Promise.resolve()
 		.then(() => getJDKPaths(opts.jdkPaths, opts.ignorePlatformPaths))
-		.then(paths => {
-			if (opts.force || results === null || jdkPaths === null || (jdkPaths < paths || jdkPaths > paths)) {
-				jdkPaths = paths;
-				return doDetect(paths);
-			}
-		})
-		.then(() => opts.gawk ? results : results.toJS());
+		.then(paths => doDetect(paths, appc.util.sha1(JSON.stringify(paths)), opts.force))
+		.then(results => opts.gawk ? results : results.toJS());
 }
 
 /**
@@ -126,21 +114,20 @@ class Watcher extends EventEmitter {
  */
 export function watch(opts = {}) {
 	const handle = new Watcher;
-	let paths;
+	let jdkPaths;
+	let hash;
 
 	Promise.resolve()
 		.then(() => getJDKPaths(opts.jdkPaths, opts.ignorePlatformPaths))
-		.then(p => {
-			paths = p;
-			if (opts.force || results === null || jdkPaths === null || (jdkPaths < paths || jdkPaths > paths)) {
-				jdkPaths = paths;
-				return doDetect(paths);
-			}
+		.then(paths => {
+			jdkPaths = paths;
+			hash = appc.util.sha1(JSON.stringify(paths));
+			return doDetect(paths, hash, true);
 		})
-		.then(() => {
-			for (const dir of paths) {
+		.then(results => {
+			for (const dir of jdkPaths) {
 				handle.unwatchers.push(appc.fs.watch(dir, _.debounce(evt => {
-					doDetect(paths)
+					doDetect([dir], hash, true)
 						.then(() => handle.emit('results', opts.gawk ? results : results.toJS()));
 				})));
 			}
@@ -159,62 +146,73 @@ export function watch(opts = {}) {
  * Checks one or more paths for a JDK.
  *
  * @param {Array} paths - One or more paths to check.
+ * @param {String} hash - The hash of all the paths. Used to look up an existing
+ * gawked result object.
+ * @param {Boolean} force - When true, bypasses cache and forces a re-detect.
  * @returns {Promise}
  */
-function doDetect(paths) {
-	const jdks = [];
-
-	if (results === null) {
-		results = new GawkObject;
-	}
+function doDetect(paths, hash, force) {
+	const results = {};
 
 	return Promise
 		.all(paths.map(dir => appc.util.mutex(dir, () => new Promise((resolve, reject) => {
-			Promise.resolve()
-				.then(() => {
-					return new Promise((resolve, reject) => {
-						if (!appc.fs.existsSync(dir)) {
-							return resolve();
-						}
+			if (cache[dir] && !force) {
+				results[dir] = 'CACHED';
+				return resolve();
+			}
 
-						isJDK(dir)
-							.then(jdk => jdk || Promise.all(fs.readdirSync(dir).map(name => isJDK(path.join(dir, name)))))
-							.then(resolve);
-					});
+			if (!appc.fs.existsSync(dir)) {
+				results[dir] = [];
+				return resolve();
+			}
+
+			isJDK(dir)
+				.then(jdk => jdk ? [jdk] : Promise.all(fs.readdirSync(dir).map(name => isJDK(path.join(dir, name)))))
+				.then(jdks => {
+					results[dir] = jdks.filter(jdk => jdk);
+					resolve();
 				})
-				.then(found => {
-					if (!Array.isArray(found)) {
-						found = [found];
-					}
-					for (const jdk of found) {
-						jdk && jdks.push(jdk);
-					}
-				})
-				.then(resolve)
 				.catch(resolve);
 		}))))
 		.then(() => {
-			const deleted = results.keys();
-
-			for (const jdk of jdks) {
-				const key = jdk.version + '_' + jdk.build;
-				delete deleted[key];
+			// make sure the destination gawk object exists
+			let gobj = cache[hash];
+			if (!gobj) {
+				gobj = cache[hash] = new GawkObject;
 			}
 
-			for (const key of deleted) {
-				results.delete(key);
-			}
+			// mix all the jdks together and keep track of removed JDKs
+			const jdks = {};
+			const removed = {};
+			for (const dir of Object.keys(results)) {
+				if (results[dir] !== 'CACHED') {
+					const cachedIds = cache[dir] ? cache[dir].map(jdk => jdk.version + '_' + jdk.build) : [];
+					const current = cache[dir] = results[dir];
 
-			for (const jdk of jdks) {
-				const key = jdk.version + '_' + jdk.build;
-				if (results.has(key)) {
-					results.get(key).mergeDeep(jdk);
-				} else {
-					results.set(key, jdk);
+					// what was removed?
+					for (const id of cachedIds) {
+						if (!current[id]) {
+							removed[id] = 1;
+						}
+					}
+				}
+
+				for (const jdk of cache[dir]) {
+					const id = jdk.version + '_' + jdk.build;
+					jdks[id] = jdk;
+					delete removed[id];
 				}
 			}
 
-			return results;
+			// delete all jdks that no longer exist
+			for (const id of Object.keys(removed)) {
+				gobj.delete(id);
+			}
+
+			// update the gawk object with the new/updated jdks
+			gobj.mergeDeep(jdks);
+
+			return gobj;
 		});
 }
 
@@ -374,9 +372,16 @@ function getJDKPaths(jdkPaths, ignorePlatformPaths) {
 
 		// 3. add the jdk paths that were passed in
 		.then(() => {
-			if (jdkPaths && !Array.isArray(jdkPaths)) {
-				throw new TypeError('Expected jdkPaths to be an array of strings');
-			} else if (!jdkPaths || jdkPaths.length === 0) {
+			if (jdkPaths) {
+				if (typeof jdkPaths === 'string') {
+					jdkPaths = [ jdkPaths ];
+				} else if (!Array.isArray(jdkPaths)) {
+					throw new TypeError('Expected jdkPaths to be an array of strings');
+				}
+			}
+
+			// if there are no paths, then return
+			if (!jdkPaths || jdkPaths.length === 0) {
 				return;
 			}
 
@@ -464,4 +469,13 @@ function findWindowsSearchPaths() {
 		searchWindowsRegistry('\\Software\\JavaSoft\\Java Development Kit'),
 		searchWindowsRegistry('\\Software\\Wow6432Node\\JavaSoft\\Java Development Kit')
 	]);
+}
+
+/**
+ * Utility function to reset all global state. This is primarily for testing
+ * purposes.
+ */
+export function reset() {
+	cache = {};
+	staticJDKPaths = null;
 }

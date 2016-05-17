@@ -44,7 +44,6 @@ describe('detect()', () => {
 	beforeEach(function () {
 		this.JAVA_HOME = process.env.JAVA_HOME;
 		this.PATH = process.env.PATH;
-
 		process.env.JAVA_HOME = '';
 		process.env.PATH = '';
 	});
@@ -52,13 +51,12 @@ describe('detect()', () => {
 	afterEach(function () {
 		process.env.JAVA_HOME = this.JAVA_HOME;
 		process.env.PATH = this.PATH;
+		jdklib.reset();
 	});
 
 	it('should detect JDK using defaults', done => {
 		jdklib
-			.detect({
-				force: true
-			})
+			.detect()
 			.then(results => {
 				validateJDKs(results);
 				done();
@@ -72,7 +70,9 @@ describe('detect()', () => {
 				force: true,
 				ignorePlatformPaths: true,
 				jdkPaths: [
-					path.join(__dirname, 'mocks', 'jdk-1.8')
+					path.join(__dirname, 'mocks', 'jdk-1.8'),
+					'/Users/chris/Desktop',
+					'/Users/chris/doesnotexist'
 				]
 			})
 			.then(results => {
@@ -165,8 +165,8 @@ describe('detect()', () => {
 			.catch(done);
 	});
 
-	it('should return gawk object and update with changes', done => {
-		const opts = {
+	it('should return unique gawk objects for different paths', done => {
+		const opts1 = {
 			force: true,
 			gawk: true,
 			ignorePlatformPaths: true,
@@ -174,6 +174,42 @@ describe('detect()', () => {
 				path.join(__dirname, 'mocks', 'jdk-1.8')
 			]
 		};
+
+		const opts2 = {
+			force: true,
+			gawk: true,
+			ignorePlatformPaths: true,
+			jdkPaths: [
+				path.join(__dirname, 'mocks', 'jdk-1.7')
+			]
+		};
+
+		Promise
+			.all([
+				jdklib.detect(opts1),
+				jdklib.detect(opts1),
+				jdklib.detect(opts2)
+			])
+			.then(results => {
+				expect(results[0]).to.equal(results[1]);
+				expect(results[0]).to.not.equal(results[2]);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should return a gawk objects and receive updates', done => {
+		const tmp = temp.mkdirSync('jdklib-');
+
+		const opts = {
+			force: true,
+			gawk: true,
+			ignorePlatformPaths: true,
+			jdkPaths: tmp
+		};
+
+		fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.8'), path.join(tmp, 'jdk-1.8'));
+
 		let counter = 0;
 
 		function checkDone(err) {
@@ -201,9 +237,8 @@ describe('detect()', () => {
 				}));
 			})
 			.then(() => {
-				opts.jdkPaths = [
-					path.join(__dirname, 'mocks', 'jdk-1.7')
-				];
+				del.sync([ path.join(tmp, 'jdk-1.8') ], { force: true });
+				fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), path.join(tmp, 'jdk-1.7'));
 				return jdklib.detect(opts);
 			})
 			.then(results => {
@@ -217,13 +252,34 @@ describe('detect()', () => {
 
 describe('watch()', () => {
 	beforeEach(function () {
+		this.JAVA_HOME = process.env.JAVA_HOME;
+		this.PATH = process.env.PATH;
+		process.env.JAVA_HOME = '';
+		process.env.PATH = '';
 		this.watcher = null;
 	});
 
 	afterEach(function () {
+		process.env.JAVA_HOME = this.JAVA_HOME;
+		process.env.PATH = this.PATH;
 		if (this.watcher) {
 			this.watcher.stop();
 		}
+		jdklib.reset();
+	});
+
+	it('should watch using defaults', function (done) {
+		this.timeout(10000);
+		this.slow(5000);
+
+		this.watcher = jdklib
+			.watch()
+			.on('results', results => {
+				validateJDKs(results);
+				this.watcher.stop();
+				done();
+			})
+			.on('error', done);
 	});
 
 	it('should watch directory for JDK to be added', function (done) {
@@ -251,7 +307,10 @@ describe('watch()', () => {
 					fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), tmp);
 				} else if (count === 2) {
 					validateJDKs(results, ['1.8.0_92', '1.7.0_80']);
+					del.sync([tmp], { force: true });
+				} else if (count === 3) {
 					this.watcher.stop();
+					validateJDKs(results, ['1.8.0_92']);
 					done();
 				}
 			})
@@ -282,7 +341,7 @@ describe('watch()', () => {
 				count++;
 				if (count === 1) {
 					validateJDKs(results, ['1.8.0_92', '1.7.0_80']);
-					del(tmp, { force: true });
+					del.sync([tmp], { force: true });
 				} else if (count === 2) {
 					validateJDKs(results, ['1.8.0_92']);
 					this.watcher.stop();
