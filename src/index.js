@@ -12,7 +12,7 @@ const exe = appc.subprocess.exe;
  * A list of requird executables used to determine if a directory is a JDK.
  * @type {Array}
  */
-const requiredExecutables = ['java' + exe, 'javac' + exe, 'keytool' + exe, 'jarsigner' + exe];
+const requiredExecutables = ['java', 'javac', 'keytool', 'jarsigner'];
 
 /**
  * Common search paths for the JVM library. This is used only for validating if
@@ -125,10 +125,17 @@ export function watch(opts = {}) {
 			return doDetect(paths, hash, true);
 		})
 		.then(results => {
+			results.watch(evt => {
+				handle.emit('results', opts.gawk ? results : results.toJS());
+			});
+
 			for (const dir of jdkPaths) {
 				handle.unwatchers.push(appc.fs.watch(dir, _.debounce(evt => {
 					doDetect([dir], hash, true)
-						.then(() => handle.emit('results', opts.gawk ? results : results.toJS()));
+						.catch(err => {
+							handle.stop();
+							handle.emit('error', err);
+						});
 				})));
 			}
 
@@ -210,7 +217,9 @@ function doDetect(paths, hash, force) {
 			}
 
 			// update the gawk object with the new/updated jdks
-			gobj.mergeDeep(jdks);
+			if (Object.keys(jdks).length) {
+				gobj.mergeDeep(jdks);
+			}
 
 			return gobj;
 		});
@@ -247,7 +256,7 @@ function isJDK(dir) {
 	};
 
 	if (!requiredExecutables.every(cmd => {
-		var p = path.join(dir, 'bin', cmd);
+		var p = path.join(dir, 'bin', cmd + exe);
 		if (appc.fs.existsSync(p)) {
 			jdkInfo.executables[cmd] = fs.realpathSync(p);
 			return true;
@@ -444,17 +453,17 @@ function findDarwinSearchPaths() {
 function findWindowsSearchPaths() {
 	const Winreg = require('winreg');
 
-	function searchWindowsRegistry(key) {
+	const searchWindowsRegistry = key => {
 		return new Promise((resolve, reject) => {
 			new Winreg({ hive: Winreg.HKLM, key })
-				.get('CurrentVersion', function (err, item) {
+				.get('CurrentVersion', (err, item) => {
 					const currentVersion = !err && item.value;
 					if (!currentVersion) {
 						return resolve();
 					}
 
 					new Winreg({ hive: Winreg.HKLM, key: key + '\\' + currentVersion })
-						.get('JavaHome', function (err, item) {
+						.get('JavaHome', (err, item) => {
 							if (!err && item.value) {
 								resolve(item.value);
 							} else {
@@ -463,7 +472,7 @@ function findWindowsSearchPaths() {
 						});
 				});
 		});
-	}
+	};
 
 	return Promise.all([
 		searchWindowsRegistry('\\Software\\JavaSoft\\Java Development Kit'),

@@ -28,9 +28,9 @@
     "test": "gulp test"
   },
   "dependencies": {
-    "gawk": "^1.4.0",
+    "gawk": "^1.5.0",
     "lodash": "^4.12.0",
-    "node-appc": "^2.0.0-alpha6",
+    "node-appc": "^2.0.0-alpha7",
     "source-map-support": "^0.4.0",
     "winreg": "^1.2.0"
   },

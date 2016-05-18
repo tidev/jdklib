@@ -1,4 +1,5 @@
 import _ from 'lodash';
+import appc from 'node-appc';
 import del from 'del';
 import { expect } from 'chai';
 import fs from 'fs-extra';
@@ -8,6 +9,17 @@ import path from 'path';
 import temp from 'temp';
 
 const isWindows = /^win/.test(process.platform);
+
+// in our tests, we need to wipe the PATH environment variable so that JDKs
+// other than our mocks are found, but on Windows, we need to leave
+// C:\Windows\System32 in the path so that we can query the Windows registry
+const tempPATH = !isWindows ? '' : (function () {
+	const windowsDir = appc.path.expand('%SystemRoot%');
+	return process.env.PATH
+		.split(path.delimiter)
+		.filter(p => p.indexOf(windowsDir) === 0)
+		.join(path.delimiter);
+}());
 
 temp.track();
 
@@ -45,7 +57,7 @@ describe('detect()', () => {
 		this.JAVA_HOME = process.env.JAVA_HOME;
 		this.PATH = process.env.PATH;
 		process.env.JAVA_HOME = '';
-		process.env.PATH = '';
+		process.env.PATH = tempPATH;
 	});
 
 	afterEach(function () {
@@ -54,7 +66,10 @@ describe('detect()', () => {
 		jdklib.reset();
 	});
 
-	it('should detect JDK using defaults', done => {
+	it('should detect JDK using defaults', function (done) {
+		this.timeout(10000);
+		this.slow(5000);
+
 		jdklib
 			.detect()
 			.then(results => {
@@ -255,7 +270,7 @@ describe('watch()', () => {
 		this.JAVA_HOME = process.env.JAVA_HOME;
 		this.PATH = process.env.PATH;
 		process.env.JAVA_HOME = '';
-		process.env.PATH = '';
+		process.env.PATH = tempPATH;
 		this.watcher = null;
 	});
 
