@@ -2,7 +2,6 @@ import _ from 'lodash';
 import appc from 'node-appc';
 import { EventEmitter } from 'events';
 import fs from 'fs';
-import { GawkObject } from 'gawk';
 import path from 'path';
 import 'source-map-support/register';
 
@@ -41,17 +40,17 @@ const libjvmLocations = {
 };
 
 /**
- * An object containing GawkObject results.
- * @type {Object}
- */
-let cache = {};
-
-/**
  * A list of all static paths to check for a JDK. Static paths are those that
  * are derived from the system PATH which cannot change once the app starts.
  * @type {Array}
  */
 let staticJDKPaths = null;
+
+/**
+ * A cache of all platform specific paths.
+ * @type {Array}
+ */
+let platformPathsCache = null;
 
 /**
  * Detects installed JDKs.
@@ -67,7 +66,7 @@ let staticJDKPaths = null;
 export function detect(opts = {}) {
 	return Promise.resolve()
 		.then(() => getJDKPaths(opts.jdkPaths, opts.ignorePlatformPaths))
-		.then(paths => doDetect(paths, appc.util.sha1(JSON.stringify(paths)), opts.force))
+		.then(paths => appc.detect.scan({ paths, force: opts.force, detectFn: isJDK }))
 		.then(results => opts.gawk ? results : results.toJS());
 }
 
@@ -122,7 +121,7 @@ export function watch(opts = {}) {
 		.then(paths => {
 			jdkPaths = paths;
 			hash = appc.util.sha1(JSON.stringify(paths));
-			return doDetect(paths, hash, true);
+			return appc.detect.scan({ paths, hash, force: true, detectFn: isJDK });
 		})
 		.then(results => {
 			results.watch(evt => {
@@ -131,7 +130,7 @@ export function watch(opts = {}) {
 
 			for (const dir of jdkPaths) {
 				handle.unwatchers.push(appc.fs.watch(dir, _.debounce(evt => {
-					doDetect([dir], hash, true)
+					appc.detect.scan({ paths: [dir], hash, force: true, detectFn: isJDK })
 						.catch(err => {
 							handle.stop();
 							handle.emit('error', err);
@@ -147,82 +146,6 @@ export function watch(opts = {}) {
 		});
 
 	return handle;
-}
-
-/**
- * Checks one or more paths for a JDK.
- *
- * @param {Array} paths - One or more paths to check.
- * @param {String} hash - The hash of all the paths. Used to look up an existing
- * gawked result object.
- * @param {Boolean} force - When true, bypasses cache and forces a re-detect.
- * @returns {Promise}
- */
-function doDetect(paths, hash, force) {
-	const results = {};
-
-	return Promise
-		.all(paths.map(dir => appc.util.mutex(dir, () => new Promise((resolve, reject) => {
-			if (cache[dir] && !force) {
-				results[dir] = 'CACHED';
-				return resolve();
-			}
-
-			if (!appc.fs.existsSync(dir)) {
-				results[dir] = [];
-				return resolve();
-			}
-
-			isJDK(dir)
-				.then(jdk => jdk ? [jdk] : Promise.all(fs.readdirSync(dir).map(name => isJDK(path.join(dir, name)))))
-				.then(jdks => {
-					results[dir] = jdks.filter(jdk => jdk);
-					resolve();
-				})
-				.catch(resolve);
-		}))))
-		.then(() => {
-			// make sure the destination gawk object exists
-			let gobj = cache[hash];
-			if (!gobj) {
-				gobj = cache[hash] = new GawkObject;
-			}
-
-			// mix all the jdks together and keep track of removed JDKs
-			const jdks = {};
-			const removed = {};
-			for (const dir of Object.keys(results)) {
-				if (results[dir] !== 'CACHED') {
-					const cachedIds = cache[dir] ? cache[dir].map(jdk => jdk.version + '_' + jdk.build) : [];
-					const current = cache[dir] = results[dir];
-
-					// what was removed?
-					for (const id of cachedIds) {
-						if (!current[id]) {
-							removed[id] = 1;
-						}
-					}
-				}
-
-				for (const jdk of cache[dir]) {
-					const id = jdk.version + '_' + jdk.build;
-					jdks[id] = jdk;
-					delete removed[id];
-				}
-			}
-
-			// delete all jdks that no longer exist
-			for (const id of Object.keys(removed)) {
-				gobj.delete(id);
-			}
-
-			// update the gawk object with the new/updated jdks
-			if (Object.keys(jdks).length) {
-				gobj.mergeDeep(jdks);
-			}
-
-			return gobj;
-		});
 }
 
 /**
@@ -279,20 +202,21 @@ function isJDK(dir) {
 			// try the 32-bit version
 			return appc.subprocess.run(jdkInfo.executables.javac, ['-version'])
 				.then(({ code, stdout, stderr }) => {
-					return code ? null : { output: stderr, arch: '32bit' };
+					return { output: stderr, arch: '32bit' };
 				});
 		})
 		.then(details => {
-			if (details) {
-				const m = details.output.match(/javac (.+)_(.+)/);
+			const m = details.output.match(/javac (.+)_(.+)/);
+			if (m) {
 				jdkInfo.version = m[1];
 				jdkInfo.build = m[2];
-				jdkInfo.architecture = details.arch;
-			} else {
-				jdkInfo = null;
 			}
+			jdkInfo.architecture = details.arch;
+			return {
+				id: jdkInfo.version + '_' + jdkInfo.build,
+				value: jdkInfo
+			};
 		})
-		.then(() => jdkInfo)
 		.catch(err => Promise.resolve());
 }
 
@@ -308,9 +232,9 @@ function getStaticJDKPaths() {
 		.all([
 			appc.subprocess.which('javac')
 				.then(file => {
-					const path = path.dirname(path.dirname(fs.realpathSync(file)));
-					if (!staticJDKPaths.includes(path)) {
-						staticJDKPaths.push(path);
+					const p = path.dirname(path.dirname(fs.realpathSync(file)));
+					if (staticJDKPaths.indexOf(p) === -1) {
+						staticJDKPaths.push(p);
 					}
 				})
 				.catch(() => Promise.resolve()),
@@ -326,11 +250,9 @@ function getStaticJDKPaths() {
 						return resolve();
 					}
 
-					fs.realpath(javaHome, (err, path) => {
-						if (!err) {
-							if (!staticJDKPaths.includes(path)) {
-								staticJDKPaths.push(path);
-							}
+					fs.realpath(javaHome, (err, p) => {
+						if (!err && staticJDKPaths.indexOf(p) === -1) {
+							staticJDKPaths.push(p);
 						}
 						resolve();
 					});
@@ -351,22 +273,28 @@ function getJDKPaths(jdkPaths, ignorePlatformPaths) {
 	const paths = [];
 
 	return Promise.resolve()
+		// 1. first get the static paths
+		.then(() => {
+			if (!staticJDKPaths) {
+				return getStaticJDKPaths();
+			}
+		})
+		.then(() => {
+			if (staticJDKPaths.length) {
+				paths.push.apply(paths, staticJDKPaths);
+			}
+		})
+
+		// 2. add the platform specific paths
 		.then(() => {
 			if (!ignorePlatformPaths) {
 				return Promise.resolve()
-					// 1. first get the static paths
-					.then(() => {
-						if (!staticJDKPaths) {
-							return getStaticJDKPaths();
-						}
-					})
-					.then(() => {
-						paths.push.apply(paths, staticJDKPaths);
-					})
-
-					// 2. add the platform specific paths
 					.then(() => {
 						if (!ignorePlatformPaths) {
+							if (platformPathsCache) {
+								return Promise.resolve(platformPathsCache);
+							}
+
 							switch (process.platform) {
 								case 'linux':  return findLinuxSearchPaths();
 								case 'darwin': return findDarwinSearchPaths();
@@ -375,7 +303,12 @@ function getJDKPaths(jdkPaths, ignorePlatformPaths) {
 						}
 						return [];
 					})
-					.then(platformPaths => paths.push.apply(paths, platformPaths));
+					.then(platformPaths => {
+						platformPathsCache = platformPaths;
+						if (platformPaths.length) {
+							paths.push.apply(paths, platformPaths);
+						}
+					});
 			}
 		})
 
@@ -384,7 +317,7 @@ function getJDKPaths(jdkPaths, ignorePlatformPaths) {
 			if (jdkPaths) {
 				if (typeof jdkPaths === 'string') {
 					jdkPaths = [ jdkPaths ];
-				} else if (!Array.isArray(jdkPaths)) {
+				} else if (!Array.isArray(jdkPaths) || jdkPaths.some(i => typeof i !== 'string')) {
 					throw new TypeError('Expected jdkPaths to be an array of strings');
 				}
 			}
@@ -397,7 +330,7 @@ function getJDKPaths(jdkPaths, ignorePlatformPaths) {
 			return Promise
 				.all(jdkPaths.map(p => new Promise((resolve, reject) => {
 					if (typeof p !== 'string' || !p) {
-						return reject(new Error('Invalid path in jdkPaths: ' + p));
+						return reject(new TypeError('Invalid path in jdkPaths'));
 					}
 
 					fs.stat(p, (err, stat) => {
@@ -485,6 +418,7 @@ function findWindowsSearchPaths() {
  * purposes.
  */
 export function reset() {
-	cache = {};
+	appc.detect.resetCache();
 	staticJDKPaths = null;
+	platformPathsCache = null;
 }

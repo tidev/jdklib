@@ -3,7 +3,6 @@ import appc from 'node-appc';
 import del from 'del';
 import { expect } from 'chai';
 import fs from 'fs-extra';
-import { GawkObject } from 'gawk';
 import * as jdklib from '../src/index';
 import path from 'path';
 import temp from 'temp';
@@ -25,6 +24,9 @@ temp.track();
 
 function validateJDKs(results, versions) {
 	expect(results).to.be.an.Object;
+	if (Array.isArray(versions)) {
+		expect(results).to.have.keys(versions);
+	}
 
 	for (const id of Object.keys(results)) {
 		if (Array.isArray(versions)) {
@@ -74,7 +76,14 @@ describe('detect()', () => {
 			.detect()
 			.then(results => {
 				validateJDKs(results);
-				done();
+
+				// one more time
+				return jdklib
+					.detect()
+					.then(results => {
+						validateJDKs(results);
+						done();
+					});
 			})
 			.catch(done);
 	});
@@ -108,6 +117,126 @@ describe('detect()', () => {
 			})
 			.then(results => {
 				validateJDKs(results, ['1.6.0_45', '1.7.0_80', '1.8.0_92']);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should not find any jdks in an empty directory', done => {
+		jdklib
+			.detect({
+				force: true,
+				ignorePlatformPaths: true,
+				jdkPaths: [
+					path.join(__dirname, 'mocks', 'empty')
+				]
+			})
+			.then(results => {
+				expect(results).to.be.an.Object;
+				expect(Object.keys(results)).to.have.lengthOf(0);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should not find any jdks in an incomplete jdk directory', done => {
+		jdklib
+			.detect({
+				force: true,
+				ignorePlatformPaths: true,
+				jdkPaths: [
+					path.join(__dirname, 'mocks', 'incomplete-jdk')
+				]
+			})
+			.then(results => {
+				expect(results).to.be.an.Object;
+				expect(Object.keys(results)).to.have.lengthOf(0);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should not find any jdks in a jdk directory with bad binaries', done => {
+		jdklib
+			.detect({
+				force: true,
+				ignorePlatformPaths: true,
+				jdkPaths: [
+					path.join(__dirname, 'mocks', 'bad-bin-jdk')
+				]
+			})
+			.then(results => {
+				expect(results).to.be.an.Object;
+				expect(Object.keys(results)).to.have.lengthOf(0);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should find a 32-bit jdk', done => {
+		jdklib
+			.detect({
+				force: true,
+				ignorePlatformPaths: true,
+				jdkPaths: [
+					path.join(__dirname, 'mocks', 'jdk-1.8-32bit')
+				]
+			})
+			.then(results => {
+				validateJDKs(results, ['1.8.0_92']);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should find mock jdk via JAVA_HOME environment variable', done => {
+		process.env.JAVA_HOME = path.join(__dirname, 'mocks', 'jdk-1.8');
+		jdklib
+			.detect({ force: true, ignorePlatformPaths: true })
+			.then(results => {
+				expect(results).to.be.an.Object;
+				expect(results).to.have.property('1.8.0_92');
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should not find a JDK when JAVA_HOME points to a file', done => {
+		process.env.JAVA_HOME = __filename;
+		jdklib
+			.detect({ force: true, ignorePlatformPaths: true })
+			.then(results => {
+				expect(results).to.be.an.Object;
+				expect(Object.keys(results)).to.have.lengthOf(0);
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should find mock jdk via javac in the PATH', done => {
+		process.env.PATH = path.join(__dirname, 'mocks', 'jdk-1.8', 'bin');
+		jdklib
+			.detect({ force: true, ignorePlatformPaths: true })
+			.then(results => {
+				expect(results).to.be.an.Object;
+				expect(results).to.have.property('1.8.0_92');
+				done();
+			})
+			.catch(done);
+	});
+
+	it('should not find a JDK when jdkPaths is a file', done => {
+		jdklib
+			.detect({
+				force: true,
+				ignorePlatformPaths: true,
+				jdkPaths: [
+					__filename
+				]
+			})
+			.then(results => {
+				expect(results).to.be.an.Object;
+				expect(Object.keys(results)).to.have.lengthOf(0);
 				done();
 			})
 			.catch(done);
@@ -236,14 +365,14 @@ describe('detect()', () => {
 		jdklib
 			.detect(opts)
 			.then(results => {
-				expect(results).to.be.instanceof(GawkObject);
+				expect(results).to.be.instanceof(appc.gawk.GawkObject);
 				expect(results.keys()).to.deep.equal(['1.8.0_92']);
 
 				const unwatch = results.watch(_.debounce(evt => {
 					try {
 						unwatch();
 						const src = evt.source;
-						expect(src).to.be.instanceof(GawkObject);
+						expect(src).to.be.instanceof(appc.gawk.GawkObject);
 						expect(src.keys()).to.deep.equal(['1.7.0_80']);
 						checkDone();
 					} catch (err) {
@@ -257,11 +386,45 @@ describe('detect()', () => {
 				return jdklib.detect(opts);
 			})
 			.then(results => {
-				expect(results).to.be.instanceof(GawkObject);
+				expect(results).to.be.instanceof(appc.gawk.GawkObject);
 				expect(results.keys()).to.deep.equal(['1.7.0_80']);
 				checkDone();
 			})
 			.catch(checkDone);
+	});
+
+	it('should handle error when jdk paths is not an array of strings', done => {
+		jdklib
+			.detect({ ignorePlatformPaths: true, jdkPaths: [123] })
+			.then(results => {
+				done(new Error('Expected error when jdkPaths is not an array or string'));
+			})
+			.catch(err => {
+				try {
+					expect(err).to.be.an.TypeError;
+					expect(err.message).to.equal('Expected jdkPaths to be an array of strings');
+					done();
+				} catch (e) {
+					done(e);
+				}
+			});
+	});
+
+	it('should handle error when jdk paths is an array with an empty string', done => {
+		jdklib
+			.detect({ ignorePlatformPaths: true, jdkPaths: [''] })
+			.then(results => {
+				done(new Error('Expected error when jdkPaths is an array with an empty string'));
+			})
+			.catch(err => {
+				try {
+					expect(err).to.be.an.TypeError;
+					expect(err.message).to.equal('Invalid path in jdkPaths');
+					done();
+				} catch (e) {
+					done(e);
+				}
+			});
 	});
 });
 
@@ -364,5 +527,123 @@ describe('watch()', () => {
 				}
 			})
 			.on('error', done);
+	});
+
+	it('should return a gawk objects and receive updates', function (done) {
+		this.timeout(10000);
+		this.slow(5000);
+
+		const tmp = temp.mkdirSync('jdklib-');
+		const opts = {
+			gawk: true,
+			ignorePlatformPaths: true,
+			jdkPaths: tmp
+		};
+
+		fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.8'), path.join(tmp, 'jdk-1.8'));
+
+		let counter = 0;
+		let gobj = null;
+
+		const checkDone = err => {
+			if (err || ++counter === 1) {
+				this.watcher.stop();
+				done(err);
+			}
+		};
+
+		this.watcher = jdklib
+			.watch(opts)
+			.on('results', results => {
+				expect(results).to.be.instanceof(appc.gawk.GawkObject);
+				if (gobj === null) {
+					expect(results.keys()).to.deep.equal(['1.8.0_92']);
+					gobj = results;
+					const unwatch = results.watch(_.debounce(evt => {
+						try {
+							unwatch();
+							const src = evt.source;
+							expect(src).to.be.instanceof(appc.gawk.GawkObject);
+							expect(src.keys()).to.deep.equal(['1.7.0_80']);
+							checkDone();
+						} catch (err) {
+							checkDone(err);
+						}
+					}));
+					del.sync([ path.join(tmp, 'jdk-1.8') ], { force: true });
+					fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), path.join(tmp, 'jdk-1.7'));
+				}
+			})
+			.on('error', checkDone);
+	});
+
+	it('should handle errors while watching', function (done) {
+		this.timeout(10000);
+		this.slow(5000);
+
+		const tmp = temp.mkdirSync('jdklib-');
+		const opts = {
+			gawk: true,
+			ignorePlatformPaths: true,
+			jdkPaths: tmp
+		};
+
+		fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.8'), path.join(tmp, 'jdk-1.8'));
+
+		let gobj = null;
+		let timer = null;
+
+		this.watcher = jdklib
+			.watch(opts)
+			.on('results', results => {
+				try {
+					expect(results).to.be.instanceof(appc.gawk.GawkObject);
+					if (gobj === null) {
+						expect(results.keys()).to.deep.equal(['1.8.0_92']);
+						gobj = results;
+						gobj.mergeDeep = () => {
+							throw new Error('oops');
+						};
+						del.sync([ path.join(tmp, 'jdk-1.8') ], { force: true });
+						fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), path.join(tmp, 'jdk-1.7'));
+						timer = setTimeout(() => {
+							this.watcher.stop();
+							done(new Error('Expected error to be handled.'));
+						}, 2000);
+					}
+				} catch (e) {
+					done(e);
+				}
+			})
+			.on('error', err => {
+				try {
+					timer && clearTimeout(timer);
+					this.watcher.stop();
+					expect(err).to.be.an.Error;
+					expect(err.message).to.equal('oops');
+					done();
+				} catch (e) {
+					done(e);
+				}
+			});
+	});
+
+	it('should handle error when jdk paths is invalid', function (done) {
+		this.watcher = jdklib
+			.watch({ ignorePlatformPaths: true, jdkPaths: [123] })
+			.on('results', results => {
+				this.watcher.stop();
+				done(new Error('Expected error when jdkPaths is not an array or string'));
+			})
+			.on('error', err => {
+				try {
+					this.watcher.stop();
+					expect(err).to.be.an.TypeError;
+					expect(err.message).to.equal('Expected jdkPaths to be an array of strings');
+					done();
+				} catch (e) {
+					done(e);
+				}
+			});
 	});
 });

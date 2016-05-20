@@ -1,6 +1,6 @@
 {
   "name": "jdklib",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "JDK Utility Library",
   "main": "./dist/index.js",
   "author": {
@@ -24,13 +24,13 @@
     "build": "gulp build",
     "coverage": "gulp coverage",
     "docs": "gulp docs",
-    "prepublish": "gulp build && npm shrinkwrap",
+    "prepublish": "gulp build && in-publish && npm shrinkwrap || not-in-publish",
     "test": "gulp test"
   },
   "dependencies": {
-    "gawk": "^1.5.0",
+    "in-publish": "^2.0.0",
     "lodash": "^4.12.0",
-    "node-appc": "^2.0.0-alpha7",
+    "node-appc": "^2.0.0-alpha9",
     "source-map-support": "^0.4.0",
     "winreg": "^1.2.0"
   },
@@ -40,7 +40,7 @@
     "chai": "^3.5.0",
     "del": "^2.2.0",
     "esdoc-es7-plugin": "0.0.3",
-    "eslint": "2.10.1",
+    "eslint": "2.10.2",
     "fs-extra": "^0.30.0",
     "gulp": "^3.9.1",
     "gulp-babel": "^6.1.2",
