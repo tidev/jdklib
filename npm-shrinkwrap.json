@@ -2226,9 +2226,9 @@
       "resolved": "https://registry.npmjs.org/mute-stream/-/mute-stream-0.0.5.tgz"
     },
     "node-appc": {
-      "version": "2.0.0-alpha17",
-      "from": "node-appc@2.0.0-alpha17",
-      "resolved": "https://registry.npmjs.org/node-appc/-/node-appc-2.0.0-alpha17.tgz",
+      "version": "2.0.0-alpha18",
+      "from": "node-appc@2.0.0-alpha18",
+      "resolved": "https://registry.npmjs.org/node-appc/-/node-appc-2.0.0-alpha18.tgz",
       "dependencies": {
         "amdefine": {
           "version": "1.0.0",

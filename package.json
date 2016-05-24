@@ -31,7 +31,7 @@
     "gawk": "^1.7.0",
     "in-publish": "^2.0.0",
     "lodash": "^4.13.1",
-    "node-appc": "2.0.0-alpha17",
+    "node-appc": "2.0.0-alpha18",
     "source-map-support": "^0.4.0",
     "winreg": "^1.2.1"
   },

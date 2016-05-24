@@ -1,6 +1,5 @@
 import _ from 'lodash';
 import appc from 'node-appc';
-import { EventEmitter } from 'events';
 import fs from 'fs';
 import { GawkArray, GawkObject } from 'gawk';
 import path from 'path';
@@ -162,36 +161,6 @@ export class JDK extends GawkObject {
 }
 
 /**
- * A handle returned when calling `watch()`. This object exposes a `stop()`
- * method to unwatch all paths specified in the `jdkPaths` parameter.
- *
- * This is not a public class. It should only be instantiated by the `watch()`
- * method.
- *
- * @emits {results} Emits the detection results.
- * @emits {error} Emitted when an error occurs.
- */
-export class Watcher extends EventEmitter {
-	/**
-	 * Initializes the Watcher instance.
-	 */
-	constructor() {
-		super();
-		this.unwatchers = [];
-	}
-
-	/**
-	 * Stops all active watchers associated with this handle.
-	 */
-	stop() {
-		let unwatch;
-		while (unwatch = this.unwatchers.shift()) {
-			unwatch();
-		}
-	}
-}
-
-/**
  * Detects installed JDKs.
  *
  * @param {Object} [opts] - An object with various params.
@@ -229,7 +198,7 @@ export function detect(opts = {}) {
  * @returns {Promise}
  */
 export function watch(opts = {}) {
-	const handle = new Watcher;
+	const handle = new appc.detect.Watcher;
 
 	Promise.resolve()
 		.then(() => opts.ignorePlatformPaths ? [] : getPlatformPaths())
