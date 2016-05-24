@@ -23,33 +23,6 @@ const tempPATH = !isWindows ? '' : (function () {
 
 temp.track();
 
-function validateJDKs(results, versions) {
-	expect(results).to.be.an.Array;
-
-	for (const jdk of results) {
-		if (Array.isArray(versions)) {
-			expect(jdk.version + '_' + jdk.build).to.equal(versions.shift());
-		}
-		expect(jdk).to.be.an.Object;
-		expect(jdk).to.have.keys('path', 'version', 'build', 'architecture', 'executables', 'default');
-		expect(jdk.path).to.be.a.String;
-		expect(jdk.path).to.not.equal('');
-		expect(() => fs.statSync(jdk.path)).to.not.throw(Error);
-		expect(jdk.version).to.be.a.String;
-		expect(jdk.version).to.not.equal('');
-		expect(jdk.build).to.be.a.String;
-		expect(jdk.build).to.not.equal('');
-		expect(jdk.architecture).to.be.a.String;
-		expect(jdk.architecture).to.be.oneOf(['32bit', '64bit']);
-		expect(jdk.executables).to.be.an.Object;
-		for (const name of Object.keys(jdk.executables)) {
-			expect(jdk.executables[name]).to.be.a.String;
-			expect(jdk.executables[name]).to.not.equal('');
-			expect(() => fs.statSync(jdk.executables[name])).to.not.throw(Error);
-		}
-	}
-}
-
 describe('detect()', () => {
 	beforeEach(function () {
 		this.JAVA_HOME = process.env.JAVA_HOME;
@@ -71,13 +44,13 @@ describe('detect()', () => {
 		jdklib
 			.detect()
 			.then(results => {
-				validateJDKs(results);
+				validateResults(results);
 
 				// one more time
 				return jdklib
 					.detect()
 					.then(results => {
-						validateJDKs(results);
+						validateResults(results);
 						done();
 					});
 			})
@@ -96,7 +69,7 @@ describe('detect()', () => {
 				]
 			})
 			.then(results => {
-				validateJDKs(results, ['1.8.0_92']);
+				validateResults(results, ['1.8.0_92']);
 				done();
 			})
 			.catch(done);
@@ -110,7 +83,7 @@ describe('detect()', () => {
 				paths: path.join(__dirname, 'mocks')
 			})
 			.then(results => {
-				validateJDKs(results, ['1.6.0_45', '1.7.0_80', '1.8.0_92', '1.8.0_92']);
+				validateResults(results, ['1.6.0_45', '1.7.0_80', '1.8.0_92', '1.8.0_92']);
 				done();
 			})
 			.catch(done);
@@ -124,8 +97,8 @@ describe('detect()', () => {
 				paths: path.join(__dirname, 'mocks', 'empty')
 			})
 			.then(results => {
-				expect(results).to.be.an.Object;
-				expect(Object.keys(results)).to.have.lengthOf(0);
+				expect(results).to.be.an.Array;
+				expect(results).to.have.lengthOf(0);
 				done();
 			})
 			.catch(done);
@@ -139,8 +112,8 @@ describe('detect()', () => {
 				paths: path.join(__dirname, 'mocks', 'incomplete-jdk')
 			})
 			.then(results => {
-				expect(results).to.be.an.Object;
-				expect(Object.keys(results)).to.have.lengthOf(0);
+				expect(results).to.be.an.Array;
+				expect(results).to.have.lengthOf(0);
 				done();
 			})
 			.catch(done);
@@ -154,8 +127,8 @@ describe('detect()', () => {
 				paths: path.join(__dirname, 'mocks', 'bad-bin-jdk')
 			})
 			.then(results => {
-				expect(results).to.be.an.Object;
-				expect(Object.keys(results)).to.have.lengthOf(0);
+				expect(results).to.be.an.Array;
+				expect(results).to.have.lengthOf(0);
 				done();
 			})
 			.catch(done);
@@ -169,7 +142,7 @@ describe('detect()', () => {
 				paths: path.join(__dirname, 'mocks', 'jdk-1.8-32bit')
 			})
 			.then(results => {
-				validateJDKs(results, ['1.8.0_92']);
+				validateResults(results, ['1.8.0_92']);
 				done();
 			})
 			.catch(done);
@@ -180,7 +153,7 @@ describe('detect()', () => {
 		jdklib
 			.detect({ force: true, ignorePlatformPaths: true })
 			.then(results => {
-				validateJDKs(results, ['1.8.0_92']);
+				validateResults(results, ['1.8.0_92']);
 				done();
 			})
 			.catch(done);
@@ -203,7 +176,7 @@ describe('detect()', () => {
 		jdklib
 			.detect({ force: true, ignorePlatformPaths: true })
 			.then(results => {
-				validateJDKs(results, ['1.8.0_92']);
+				validateResults(results, ['1.8.0_92']);
 				done();
 			})
 			.catch(done);
@@ -225,7 +198,7 @@ describe('detect()', () => {
 	});
 
 	it('should not re-detect after initial detect', done => {
-		const tmp = temp.mkdirSync('jdklib-');
+		const tmp = temp.mkdirSync('jdklib-test-');
 		const opts = {
 			force: true,
 			ignorePlatformPaths: true,
@@ -239,7 +212,7 @@ describe('detect()', () => {
 		jdklib
 			.detect(opts)
 			.then(results => {
-				validateJDKs(results, ['1.8.0_92']);
+				validateResults(results, ['1.8.0_92']);
 			})
 			.then(() => {
 				// run detect again, but this time we do not force re-detect and
@@ -251,7 +224,7 @@ describe('detect()', () => {
 				return jdklib.detect(opts);
 			})
 			.then(results => {
-				validateJDKs(results, ['1.8.0_92']);
+				validateResults(results, ['1.8.0_92']);
 			})
 			.then(() => {
 				// force re-detect again to find the JDK 1.7 we copied
@@ -259,7 +232,7 @@ describe('detect()', () => {
 				return jdklib.detect(opts);
 			})
 			.then(results => {
-				validateJDKs(results, ['1.7.0_80', '1.8.0_92']);
+				validateResults(results, ['1.7.0_80', '1.8.0_92']);
 				done();
 			})
 			.catch(done);
@@ -319,7 +292,7 @@ describe('detect()', () => {
 	});
 
 	it('should return a gawk objects and receive updates', done => {
-		const tmp = temp.mkdirSync('jdklib-');
+		const tmp = temp.mkdirSync('jdklib-test-');
 
 		const opts = {
 			force: true,
@@ -341,13 +314,12 @@ describe('detect()', () => {
 		jdklib
 			.detect(opts)
 			.then(results => {
-				validateJDKs(results.toJS(), ['1.8.0_92']);
+				validateResults(results.toJS(), ['1.8.0_92']);
 
 				const unwatch = results.watch(_.debounce(evt => {
 					try {
 						unwatch();
-						const src = evt.source;
-						validateJDKs(src.toJS(), ['1.7.0_80']);
+						validateResults(evt.source.toJS(), ['1.7.0_80']);
 						checkDone();
 					} catch (err) {
 						checkDone(err);
@@ -360,7 +332,7 @@ describe('detect()', () => {
 				return jdklib.detect(opts);
 			})
 			.then(results => {
-				validateJDKs(results.toJS(), ['1.7.0_80']);
+				validateResults(results.toJS(), ['1.7.0_80']);
 				checkDone();
 			})
 			.catch(checkDone);
@@ -419,7 +391,7 @@ describe('watch()', () => {
 		this.watcher = jdklib
 			.watch()
 			.on('results', results => {
-				validateJDKs(results);
+				validateResults(results);
 				this.watcher.stop();
 				done();
 			})
@@ -430,7 +402,7 @@ describe('watch()', () => {
 		this.timeout(10000);
 		this.slow(5000);
 
-		const tmp = temp.mkdirSync('jdklib-');
+		const tmp = temp.mkdirSync('jdklib-test-');
 		const opts = {
 			force: true,
 			ignorePlatformPaths: true,
@@ -447,14 +419,14 @@ describe('watch()', () => {
 			.on('results', results => {
 				count++;
 				if (count === 1) {
-					validateJDKs(results, ['1.8.0_92']);
+					validateResults(results, ['1.8.0_92']);
 					fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), tmp);
 				} else if (count === 2) {
-					validateJDKs(results, ['1.7.0_80', '1.8.0_92']);
+					validateResults(results, ['1.7.0_80', '1.8.0_92']);
 					del.sync([tmp], { force: true });
 				} else if (count === 3) {
 					this.watcher.stop();
-					validateJDKs(results, ['1.8.0_92']);
+					validateResults(results, ['1.8.0_92']);
 					done();
 				}
 			})
@@ -465,7 +437,7 @@ describe('watch()', () => {
 		this.timeout(10000);
 		this.slow(5000);
 
-		const tmp = temp.mkdirSync('jdklib-');
+		const tmp = temp.mkdirSync('jdklib-test-');
 		const opts = {
 			force: true,
 			ignorePlatformPaths: true,
@@ -484,10 +456,10 @@ describe('watch()', () => {
 			.on('results', results => {
 				count++;
 				if (count === 1) {
-					validateJDKs(results, ['1.7.0_80', '1.8.0_92']);
+					validateResults(results, ['1.7.0_80', '1.8.0_92']);
 					del.sync([tmp], { force: true });
 				} else if (count === 2) {
-					validateJDKs(results, ['1.8.0_92']);
+					validateResults(results, ['1.8.0_92']);
 					this.watcher.stop();
 					done();
 				}
@@ -499,7 +471,7 @@ describe('watch()', () => {
 		this.timeout(10000);
 		this.slow(5000);
 
-		const tmp = temp.mkdirSync('jdklib-');
+		const tmp = temp.mkdirSync('jdklib-test-');
 		const opts = {
 			gawk: true,
 			ignorePlatformPaths: true,
@@ -523,13 +495,13 @@ describe('watch()', () => {
 			.on('results', results => {
 				expect(results).to.be.instanceof(GawkArray);
 				if (gobj === null) {
-					validateJDKs(results.toJS(), ['1.8.0_92']);
+					validateResults(results.toJS(), ['1.8.0_92']);
 					gobj = results;
 					const unwatch = results.watch(_.debounce(evt => {
 						try {
 							unwatch();
 							const src = evt.source;
-							validateJDKs(src.toJS(), ['1.7.0_80']);
+							validateResults(src.toJS(), ['1.7.0_80']);
 							checkDone();
 						} catch (err) {
 							checkDone(err);
@@ -561,3 +533,30 @@ describe('watch()', () => {
 			});
 	});
 });
+
+function validateResults(results, versions) {
+	expect(results).to.be.an.Array;
+
+	for (const jdk of results) {
+		if (Array.isArray(versions)) {
+			expect(jdk.version + '_' + jdk.build).to.equal(versions.shift());
+		}
+		expect(jdk).to.be.an.Object;
+		expect(jdk).to.have.keys('path', 'version', 'build', 'architecture', 'executables', 'default');
+		expect(jdk.path).to.be.a.String;
+		expect(jdk.path).to.not.equal('');
+		expect(() => fs.statSync(jdk.path)).to.not.throw(Error);
+		expect(jdk.version).to.be.a.String;
+		expect(jdk.version).to.not.equal('');
+		expect(jdk.build).to.be.a.String;
+		expect(jdk.build).to.not.equal('');
+		expect(jdk.architecture).to.be.a.String;
+		expect(jdk.architecture).to.be.oneOf(['32bit', '64bit']);
+		expect(jdk.executables).to.be.an.Object;
+		for (const name of Object.keys(jdk.executables)) {
+			expect(jdk.executables[name]).to.be.a.String;
+			expect(jdk.executables[name]).to.not.equal('');
+			expect(() => fs.statSync(jdk.executables[name])).to.not.throw(Error);
+		}
+	}
+}

@@ -167,8 +167,8 @@ export class JDK extends GawkObject {
  * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
  * well known platform specific paths.
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
- * @param {Boolan} [opts.gawk] - If true, returns the raw internal Gawk object,
- * otherwise returns a JavaScript object.
+ * @param {Boolan} [opts.gawk] - If true, returns the raw internal GawkArray,
+ * otherwise returns a JavaScript array.
  * @returns {Promise}
  */
 export function detect(opts = {}) {
@@ -193,8 +193,8 @@ export function detect(opts = {}) {
  * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
  * well known platform specific paths.
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
- * @param {Boolan} [opts.gawk] - If true, returns the raw internal Gawk object,
- * otherwise returns a JavaScript object.
+ * @param {Boolan} [opts.gawk] - If true, returns the raw internal GawkArray,
+ * otherwise returns a JavaScript array.
  * @returns {Promise}
  */
 export function watch(opts = {}) {
