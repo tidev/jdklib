@@ -7,10 +7,11 @@ import path from 'path';
 import 'source-map-support/register';
 
 /**
- * A list of requird executables used to determine if a directory is a JDK.
- * @type {Array}
+ * The scanner instance used to scan paths and cache per-path results returned
+ * by the detectFn `isJDK()`.
+ * @type {Scanner}
  */
-const requiredExecutables = ['java', 'javac', 'keytool', 'jarsigner'];
+const scanner = new appc.detect.Scanner;
 
 /**
  * Common search paths for the JVM library. This is used only for validating if
@@ -39,20 +40,37 @@ const libjvmLocations = {
 };
 
 /**
+ * A pre-baked map of all paths in the PATH environment variable so jdklib can
+ * quickly check if a specific JDK is the default.
+ * @type {Object}
+ */
+const systemPaths = {};
+{
+	for (let p of process.env.PATH.split(path.delimiter)) {
+		try {
+			if (p = fs.realpathSync(p)) {
+				systemPaths[p] = 1;
+			}
+		} catch (e) {
+			// squeltch
+		}
+	}
+}
+
+/**
  * A map of the hash of the JDK paths to the resulting GawkArray.
  * @type {Object}
  */
 const cache = {};
 
 /**
- * Resets the internal detection result cache. This is primarily for testing
+ * Resets the internal detection result cache. This is intended for testing
  * purposes.
  */
 export function resetCache() {
 	for (const key of Object.keys(cache)) {
 		delete cache[key];
 	}
-	appc.detect.resetCache();
 }
 
 /**
@@ -91,7 +109,7 @@ export class JDK extends GawkObject {
 			default: false
 		};
 
-		if (!requiredExecutables.every(cmd => {
+		if (!['java', 'javac', 'keytool', 'jarsigner'].every(cmd => {
 			const p = path.join(dir, 'bin', cmd + appc.subprocess.exe);
 			if (appc.fs.existsSync(p)) {
 				values.executables[cmd] = fs.realpathSync(p);
@@ -190,7 +208,7 @@ export function detect(opts = {}) {
 			paths: platformPaths.concat(opts.paths).filter(p => p)
 		}))
 		.then(paths => {
-			return appc.detect.scan({ paths, force: opts.force, detectFn: isJDK, depth: 1 })
+			return scanner.scan({ paths, force: opts.force, detectFn: isJDK, depth: 1 })
 				.then(results => processJDKs(results, paths));
 		})
 		.then(results => opts.gawk ? results : results.toJS());
@@ -218,7 +236,7 @@ export function watch(opts = {}) {
 			paths: platformPaths.concat(opts.paths).filter(p => p)
 		}))
 		.then(paths => {
-			return appc.detect.scan({ paths, force: opts.force, detectFn: isJDK, depth: 1 })
+			return scanner.scan({ paths, force: opts.force, detectFn: isJDK, depth: 1 })
 				.then(results => processJDKs(results, paths))
 				.then(results => {
 					results.watch(evt => {
@@ -227,7 +245,7 @@ export function watch(opts = {}) {
 
 					for (const dir of paths) {
 						handle.unwatchers.push(appc.fs.watch(dir, _.debounce(evt => {
-							appc.detect.scan({ paths: [dir], force: true, detectFn: isJDK, depth: 1 })
+							scanner.scan({ paths: [dir], force: true, detectFn: isJDK, depth: 1 })
 								.then(results => processJDKs(results, paths))
 								.catch(err => {
 									handle.stop();
@@ -256,19 +274,6 @@ export function watch(opts = {}) {
  * @returns {GawkArray}
  */
 function processJDKs(jdks, paths) {
-	// build a list of paths so that we can quickly check if a specific JDK is
-	// the one containing javac from the system path
-	const systemPaths = {};
-	for (let p of process.env.PATH.split(path.delimiter)) {
-		try {
-			if (p = fs.realpathSync(p)) {
-				systemPaths[p] = 1;
-			}
-		} catch (e) {
-			// squeltch
-		}
-	}
-
 	const hash = appc.util.sha1(JSON.stringify(paths));
 	let cachedValue = cache[hash];
 
