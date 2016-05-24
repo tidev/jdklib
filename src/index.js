@@ -273,7 +273,7 @@ export function watch(opts = {}) {
  * @param {Array<String>} paths - The list of paths scanned to find the JDKs.
  * @returns {GawkArray}
  */
-function processJDKs(jdks, paths) {
+function processJDKs(list, paths) {
 	const hash = appc.util.sha1(JSON.stringify(paths));
 	let cachedValue = cache[hash];
 	let foundDefault = false;
