@@ -1355,9 +1355,9 @@
       "resolved": "https://registry.npmjs.org/fs-exists-sync/-/fs-exists-sync-0.1.0.tgz"
     },
     "gawk": {
-      "version": "1.6.1",
-      "from": "gawk@>=1.6.1 <2.0.0",
-      "resolved": "https://registry.npmjs.org/gawk/-/gawk-1.6.1.tgz",
+      "version": "1.7.0",
+      "from": "gawk@>=1.7.0 <2.0.0",
+      "resolved": "https://registry.npmjs.org/gawk/-/gawk-1.7.0.tgz",
       "dependencies": {
         "amdefine": {
           "version": "1.0.0",
@@ -2226,9 +2226,9 @@
       "resolved": "https://registry.npmjs.org/mute-stream/-/mute-stream-0.0.5.tgz"
     },
     "node-appc": {
-      "version": "2.0.0-alpha15",
-      "from": "node-appc@2.0.0-alpha15",
-      "resolved": "https://registry.npmjs.org/node-appc/-/node-appc-2.0.0-alpha15.tgz",
+      "version": "2.0.0-alpha17",
+      "from": "node-appc@2.0.0-alpha17",
+      "resolved": "https://registry.npmjs.org/node-appc/-/node-appc-2.0.0-alpha17.tgz",
       "dependencies": {
         "amdefine": {
           "version": "1.0.0",

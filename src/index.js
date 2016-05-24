@@ -4,7 +4,10 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import { GawkArray, GawkObject } from 'gawk';
 import path from 'path';
-import 'source-map-support/register';
+
+if (!Error.prepareStackTrace) {
+	require('source-map-support/register');
+}
 
 /**
  * The scanner instance used to scan paths and cache per-path results returned
