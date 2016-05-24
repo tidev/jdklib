@@ -176,7 +176,7 @@ export class Watcher extends EventEmitter {
  * @param {Object} [opts] - An object with various params.
  * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
  * well known platform specific paths.
- * @param {Array} [opts.jdkPaths] - One or more paths to known JDKs.
+ * @param {Array} [opts.paths] - One or more paths to known JDKs.
  * @param {Boolan} [opts.gawk] - If true, returns the raw internal Gawk object,
  * otherwise returns a JavaScript object.
  * @returns {Promise}
@@ -187,14 +187,8 @@ export function detect(opts = {}) {
 		.then(platformPaths => appc.detect.getPaths({
 			env: 'JAVA_HOME',
 			executable: 'javac' + appc.subprocess.exe,
-			paths: platformPaths.concat(opts.jdkPaths).filter(p => p)
+			paths: platformPaths.concat(opts.paths).filter(p => p)
 		}))
-		.catch(err => {
-			if (err instanceof Error && /expected paths to/i.test(err.message)) {
-				return Promise.reject(new TypeError('Expected jdkPaths to be an array of strings'));
-			}
-			return Promise.reject(err);
-		})
 		.then(paths => {
 			return appc.detect.scan({ paths, force: opts.force, detectFn: isJDK, depth: 1 })
 				.then(results => processJDKs(results, paths));
@@ -208,29 +202,21 @@ export function detect(opts = {}) {
  * @param {Object} [opts] - An object with various params.
  * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
  * well known platform specific paths.
- * @param {Array} [opts.jdkPaths] - One or more paths to known JDKs.
+ * @param {Array} [opts.paths] - One or more paths to known JDKs.
  * @param {Boolan} [opts.gawk] - If true, returns the raw internal Gawk object,
  * otherwise returns a JavaScript object.
  * @returns {Promise}
  */
 export function watch(opts = {}) {
 	const handle = new Watcher;
-	let jdkPaths;
-	let hash;
 
 	Promise.resolve()
 		.then(() => opts.ignorePlatformPaths ? [] : getPlatformPaths())
 		.then(platformPaths => appc.detect.getPaths({
 			env: 'JAVA_HOME',
 			executable: 'javac' + appc.subprocess.exe,
-			paths: platformPaths.concat(opts.jdkPaths).filter(p => p)
+			paths: platformPaths.concat(opts.paths).filter(p => p)
 		}))
-		.catch(err => {
-			if (err instanceof Error && /expected paths to/i.test(err.message)) {
-				return Promise.reject(new TypeError('Expected jdkPaths to be an array of strings'));
-			}
-			return Promise.reject(err);
-		})
 		.then(paths => {
 			return appc.detect.scan({ paths, force: opts.force, detectFn: isJDK, depth: 1 })
 				.then(results => processJDKs(results, paths))

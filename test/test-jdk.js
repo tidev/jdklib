@@ -89,7 +89,7 @@ describe('detect()', () => {
 			.detect({
 				force: true,
 				ignorePlatformPaths: true,
-				jdkPaths: [
+				paths: [
 					path.join(__dirname, 'mocks', 'jdk-1.8'),
 					'/Users/chris/Desktop',
 					'/Users/chris/doesnotexist'
@@ -107,9 +107,7 @@ describe('detect()', () => {
 			.detect({
 				force: true,
 				ignorePlatformPaths: true,
-				jdkPaths: [
-					path.join(__dirname, 'mocks')
-				]
+				paths: path.join(__dirname, 'mocks')
 			})
 			.then(results => {
 				validateJDKs(results, ['1.6.0_45', '1.7.0_80', '1.8.0_92', '1.8.0_92']);
@@ -123,9 +121,7 @@ describe('detect()', () => {
 			.detect({
 				force: true,
 				ignorePlatformPaths: true,
-				jdkPaths: [
-					path.join(__dirname, 'mocks', 'empty')
-				]
+				paths: path.join(__dirname, 'mocks', 'empty')
 			})
 			.then(results => {
 				expect(results).to.be.an.Object;
@@ -140,9 +136,7 @@ describe('detect()', () => {
 			.detect({
 				force: true,
 				ignorePlatformPaths: true,
-				jdkPaths: [
-					path.join(__dirname, 'mocks', 'incomplete-jdk')
-				]
+				paths: path.join(__dirname, 'mocks', 'incomplete-jdk')
 			})
 			.then(results => {
 				expect(results).to.be.an.Object;
@@ -157,9 +151,7 @@ describe('detect()', () => {
 			.detect({
 				force: true,
 				ignorePlatformPaths: true,
-				jdkPaths: [
-					path.join(__dirname, 'mocks', 'bad-bin-jdk')
-				]
+				paths: path.join(__dirname, 'mocks', 'bad-bin-jdk')
 			})
 			.then(results => {
 				expect(results).to.be.an.Object;
@@ -174,9 +166,7 @@ describe('detect()', () => {
 			.detect({
 				force: true,
 				ignorePlatformPaths: true,
-				jdkPaths: [
-					path.join(__dirname, 'mocks', 'jdk-1.8-32bit')
-				]
+				paths: path.join(__dirname, 'mocks', 'jdk-1.8-32bit')
 			})
 			.then(results => {
 				validateJDKs(results, ['1.8.0_92']);
@@ -219,14 +209,12 @@ describe('detect()', () => {
 			.catch(done);
 	});
 
-	it('should not find a JDK when jdkPaths is a file', done => {
+	it('should not find a JDK when paths is a file', done => {
 		jdklib
 			.detect({
 				force: true,
 				ignorePlatformPaths: true,
-				jdkPaths: [
-					__filename
-				]
+				paths: __filename
 			})
 			.then(results => {
 				expect(results).to.be.an.Array;
@@ -241,7 +229,7 @@ describe('detect()', () => {
 		const opts = {
 			force: true,
 			ignorePlatformPaths: true,
-			jdkPaths: [
+			paths: [
 				path.join(__dirname, 'mocks', 'jdk-1.8'),
 				tmp
 			]
@@ -284,9 +272,7 @@ describe('detect()', () => {
 		const opts = {
 			force: true,
 			ignorePlatformPaths: true,
-			jdkPaths: [
-				path.join(__dirname, 'mocks', 'jdk-1.8')
-			]
+			paths: path.join(__dirname, 'mocks', 'jdk-1.8')
 		};
 
 		Promise
@@ -308,18 +294,14 @@ describe('detect()', () => {
 			force: true,
 			gawk: true,
 			ignorePlatformPaths: true,
-			jdkPaths: [
-				path.join(__dirname, 'mocks', 'jdk-1.8')
-			]
+			paths: path.join(__dirname, 'mocks', 'jdk-1.8')
 		};
 
 		const opts2 = {
 			force: true,
 			gawk: true,
 			ignorePlatformPaths: true,
-			jdkPaths: [
-				path.join(__dirname, 'mocks', 'jdk-1.7')
-			]
+			paths: path.join(__dirname, 'mocks', 'jdk-1.7')
 		};
 
 		Promise
@@ -343,7 +325,7 @@ describe('detect()', () => {
 			force: true,
 			gawk: true,
 			ignorePlatformPaths: true,
-			jdkPaths: tmp
+			paths: tmp
 		};
 
 		fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.8'), path.join(tmp, 'jdk-1.8'));
@@ -386,14 +368,14 @@ describe('detect()', () => {
 
 	it('should handle error when jdk paths is not an array of strings', done => {
 		jdklib
-			.detect({ ignorePlatformPaths: true, jdkPaths: [123] })
+			.detect({ ignorePlatformPaths: true, paths: [ 123 ] })
 			.then(results => {
-				done(new Error('Expected error when jdkPaths is not an array or string'));
+				done(new Error('Expected rejection'));
 			})
 			.catch(err => {
 				try {
 					expect(err).to.be.an.TypeError;
-					expect(err.message).to.equal('Expected jdkPaths to be an array of strings');
+					expect(err.message).to.equal('Expected paths to be a string or an array of strings');
 					done();
 				} catch (e) {
 					done(e);
@@ -403,7 +385,7 @@ describe('detect()', () => {
 
 	it('should strip empty jdk paths', done => {
 		jdklib
-			.detect({ ignorePlatformPaths: true, jdkPaths: [''] })
+			.detect({ ignorePlatformPaths: true, paths: [ '' ] })
 			.then(results => {
 				expect(results).to.have.lengthOf(0);
 				done();
@@ -452,7 +434,7 @@ describe('watch()', () => {
 		const opts = {
 			force: true,
 			ignorePlatformPaths: true,
-			jdkPaths: [
+			paths: [
 				path.join(__dirname, 'mocks', 'jdk-1.8'),
 				tmp
 			]
@@ -487,7 +469,7 @@ describe('watch()', () => {
 		const opts = {
 			force: true,
 			ignorePlatformPaths: true,
-			jdkPaths: [
+			paths: [
 				path.join(__dirname, 'mocks', 'jdk-1.8'),
 				tmp
 			]
@@ -521,7 +503,7 @@ describe('watch()', () => {
 		const opts = {
 			gawk: true,
 			ignorePlatformPaths: true,
-			jdkPaths: tmp
+			paths: tmp
 		};
 
 		fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.8'), path.join(tmp, 'jdk-1.8'));
@@ -562,16 +544,16 @@ describe('watch()', () => {
 
 	it('should handle error when jdk paths is invalid', function (done) {
 		this.watcher = jdklib
-			.watch({ ignorePlatformPaths: true, jdkPaths: [123] })
+			.watch({ ignorePlatformPaths: true, paths: [ 123 ] })
 			.on('results', results => {
 				this.watcher.stop();
-				done(new Error('Expected error when jdkPaths is not an array or string'));
+				done(new Error('Expected error to be emitted'));
 			})
 			.on('error', err => {
 				try {
 					this.watcher.stop();
 					expect(err).to.be.an.TypeError;
-					expect(err.message).to.equal('Expected jdkPaths to be an array of strings');
+					expect(err.message).to.equal('Expected paths to be a string or an array of strings');
 					done();
 				} catch (e) {
 					done(e);
