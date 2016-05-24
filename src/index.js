@@ -14,6 +14,30 @@ import 'source-map-support/register';
 const scanner = new appc.detect.Scanner;
 
 /**
+ * A pre-baked map of all paths in the PATH environment variable so we can
+ * quickly check if a specific JDK is the default.
+ * @type {Object}
+ */
+const systemPaths = {};
+{
+	for (let p of process.env.PATH.split(path.delimiter)) {
+		try {
+			if (p = fs.realpathSync(p)) {
+				systemPaths[p] = 1;
+			}
+		} catch (e) {
+			// squeltch
+		}
+	}
+}
+
+/**
+ * A map of the hash of the JDK paths to the resulting GawkArray.
+ * @type {Object}
+ */
+const cache = {};
+
+/**
  * Common search paths for the JVM library. This is used only for validating if
  * a directory is a JDK.
  * @type {Object}
@@ -38,30 +62,6 @@ const libjvmLocations = {
 		'jre/bin/client/jvm.dll'
 	]
 };
-
-/**
- * A pre-baked map of all paths in the PATH environment variable so jdklib can
- * quickly check if a specific JDK is the default.
- * @type {Object}
- */
-const systemPaths = {};
-{
-	for (let p of process.env.PATH.split(path.delimiter)) {
-		try {
-			if (p = fs.realpathSync(p)) {
-				systemPaths[p] = 1;
-			}
-		} catch (e) {
-			// squeltch
-		}
-	}
-}
-
-/**
- * A map of the hash of the JDK paths to the resulting GawkArray.
- * @type {Object}
- */
-const cache = {};
 
 /**
  * Resets the internal detection result cache. This is intended for testing
@@ -269,18 +269,16 @@ export function watch(opts = {}) {
  * Processes the array of discovered JDKs. It sorts the JDKs by version, selects
  * which JDK is the "default", and stores the new result in the cache.
  *
- * @param {Array<JDK>} jdks - An array containing zero or more JDK objects.
+ * @param {Array<JDK>} list - An array containing zero or more JDK objects.
  * @param {Array<String>} paths - The list of paths scanned to find the JDKs.
  * @returns {GawkArray}
  */
 function processJDKs(jdks, paths) {
 	const hash = appc.util.sha1(JSON.stringify(paths));
 	let cachedValue = cache[hash];
-
 	let foundDefault = false;
 
-	// sort the JDKs
-	jdks.sort((a, b) => {
+	list.sort((a, b) => {
 		const r = appc.version.compare(a.get('version').toJS(), b.get('version').toJS());
 		const b1 = a.get('build').toJS();
 		const b2 = b.get('build').toJS();
@@ -289,10 +287,10 @@ function processJDKs(jdks, paths) {
 
 	// loop over all of the new JDKs and set default version and copy the gawk
 	// watchers
-	for (const jdk of jdks) {
+	for (const jdk of list) {
 		if (!foundDefault) {
 			// test if this JDK is the one in the system path
-			const javac = jdk.get(['executables', 'javac']);
+			const javac = jdk.get(['executables', 'javac']).toJS();
 			if (javac && systemPaths[path.dirname(javac)]) {
 				jdk.set('default', true);
 				foundDefault = true;
@@ -316,9 +314,9 @@ function processJDKs(jdks, paths) {
 	}
 
 	// no javac found the system path, so just select the last one as the default
-	if (!foundDefault && jdks.length) {
+	if (!foundDefault && list.length) {
 		// pick the newest
-		jdks[jdks.length-1].set('default', true);
+		list[list.length-1].set('default', true);
 	}
 
 	// if we don't have a destination GawkArray for these results, create and
@@ -329,7 +327,7 @@ function processJDKs(jdks, paths) {
 
 	// replace the internal array of the GawkArray and manually trigger the hash
 	// to be regenerated and listeners to be notified
-	cachedValue._value = jdks;
+	cachedValue._value = list;
 	cachedValue.notify();
 
 	return cachedValue;
