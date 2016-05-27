@@ -25,15 +25,15 @@ temp.track();
 
 describe('detect()', () => {
 	beforeEach(function () {
-		this.JAVA_HOME = process.env.JAVA_HOME;
-		this.PATH = process.env.PATH;
+		this.JAVA_HOME        = process.env.JAVA_HOME;
+		this.PATH             = process.env.PATH;
 		process.env.JAVA_HOME = '';
-		process.env.PATH = tempPATH;
+		process.env.PATH      = tempPATH;
 	});
 
 	afterEach(function () {
 		process.env.JAVA_HOME = this.JAVA_HOME;
-		process.env.PATH = this.PATH;
+		process.env.PATH      = this.PATH;
 		jdklib.resetCache();
 	});
 
@@ -368,19 +368,17 @@ describe('detect()', () => {
 
 describe('watch()', () => {
 	beforeEach(function () {
-		this.JAVA_HOME = process.env.JAVA_HOME;
-		this.PATH = process.env.PATH;
+		this.JAVA_HOME        = process.env.JAVA_HOME;
+		this.PATH             = process.env.PATH;
 		process.env.JAVA_HOME = '';
-		process.env.PATH = tempPATH;
-		this.watcher = null;
+		process.env.PATH      = tempPATH;
+		this.watcher          = null;
 	});
 
 	afterEach(function () {
 		process.env.JAVA_HOME = this.JAVA_HOME;
-		process.env.PATH = this.PATH;
-		if (this.watcher) {
-			this.watcher.stop();
-		}
+		process.env.PATH      = this.PATH;
+		this.watcher && this.watcher.stop();
 		jdklib.resetCache();
 	});
 
@@ -500,8 +498,7 @@ describe('watch()', () => {
 					const unwatch = results.watch(_.debounce(evt => {
 						try {
 							unwatch();
-							const src = evt.source;
-							validateResults(src.toJS(), ['1.7.0_80']);
+							validateResults(evt.source.toJS(), ['1.7.0_80']);
 							checkDone();
 						} catch (err) {
 							checkDone(err);

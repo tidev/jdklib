@@ -169,7 +169,7 @@ export class JDK extends GawkObject {
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
  * @param {Boolan} [opts.gawk] - If true, returns the raw internal GawkArray,
  * otherwise returns a JavaScript array.
- * @returns {Promise}
+ * @returns {Promise} Resolves an object or GawkObject containing the values.
  */
 export function detect(opts = {}) {
 	return Promise.resolve()
@@ -195,7 +195,7 @@ export function detect(opts = {}) {
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
  * @param {Boolan} [opts.gawk] - If true, returns the raw internal GawkArray,
  * otherwise returns a JavaScript array.
- * @returns {Promise}
+ * @returns {Watcher}
  */
 export function watch(opts = {}) {
 	const handle = new appc.detect.Watcher;
@@ -217,7 +217,7 @@ export function watch(opts = {}) {
 
 					for (const dir of paths) {
 						handle.unwatchers.push(appc.fs.watch(dir, _.debounce(evt => {
-							scanner.scan({ paths: [dir], force: true, detectFn: isJDK, depth: 1 })
+							scanner.scan({ paths, onlyPaths: [dir], force: true, detectFn: isJDK, depth: 1 })
 								.then(results => processJDKs(results, paths))
 								.catch(err => {
 									handle.stop();
@@ -339,18 +339,18 @@ function getPlatformPaths() {
 	}
 
 	if (process.platform === 'win32') {
-		const Winreg = require('winreg');
+		const Registry = require('winreg');
 
 		const searchWindowsRegistry = key => {
 			return new Promise((resolve, reject) => {
-				new Winreg({ hive: Winreg.HKLM, key })
+				new Registry({ hive: Registry.HKLM, key })
 					.get('CurrentVersion', (err, item) => {
 						const currentVersion = !err && item.value;
 						if (!currentVersion) {
 							return resolve();
 						}
 
-						new Winreg({ hive: Winreg.HKLM, key: key + '\\' + currentVersion })
+						new Registry({ hive: Registry.HKLM, key: key + '\\' + currentVersion })
 							.get('JavaHome', (err, item) => {
 								if (!err && item.value) {
 									resolve(item.value);
