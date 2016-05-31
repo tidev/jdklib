@@ -16,24 +16,6 @@ if (!Error.prepareStackTrace) {
 const scanner = new appc.detect.Scanner;
 
 /**
- * A pre-baked map of all paths in the PATH environment variable so we can
- * quickly check if a specific JDK is the default.
- * @type {Object}
- */
-const systemPaths = {};
-{
-	for (let p of process.env.PATH.split(path.delimiter)) {
-		try {
-			if (p = fs.realpathSync(p)) {
-				systemPaths[p] = 1;
-			}
-		} catch (e) {
-			// squeltch
-		}
-	}
-}
-
-/**
  * A map of the hash of the JDK paths or watch uuid to the resulting GawkArray.
  * @type {Object}
  */
