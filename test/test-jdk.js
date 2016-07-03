@@ -3,17 +3,14 @@ import appc from 'node-appc';
 import del from 'del';
 import { expect } from 'chai';
 import fs from 'fs-extra';
-import { GawkArray } from 'gawk';
 import * as jdklib from '../src/index';
 import path from 'path';
 import temp from 'temp';
 
-const isWindows = /^win/.test(process.platform);
-
 // in our tests, we need to wipe the PATH environment variable so that JDKs
 // other than our mocks are found, but on Windows, we need to leave
 // C:\Windows\System32 in the path so that we can query the Windows registry
-const tempPATH = !isWindows ? '' : (function () {
+const tempPATH = process.platform !== 'win32' ? '' : (function () {
 	const windowsDir = appc.path.expand('%SystemRoot%');
 	return process.env.PATH
 		.split(path.delimiter)
@@ -23,23 +20,47 @@ const tempPATH = !isWindows ? '' : (function () {
 
 temp.track();
 
+describe('JDK', () => {
+	it('should throw error if dir is not a string', () => {
+		expect(() => {
+			new jdklib.JDK();
+		}).to.throw(TypeError, 'Expected directory to be a valid string');
+
+		expect(() => {
+			new jdklib.JDK(123);
+		}).to.throw(TypeError, 'Expected directory to be a valid string');
+	});
+
+	it('should throw error if dir does not exist', () => {
+		expect(() => {
+			new jdklib.JDK('doesnotexist');
+		}).to.throw(Error, 'Directory does not exist');
+	});
+});
+
 describe('detect()', () => {
 	beforeEach(function () {
 		this.JAVA_HOME        = process.env.JAVA_HOME;
 		this.PATH             = process.env.PATH;
-		process.env.JAVA_HOME = '';
 		process.env.PATH      = tempPATH;
+		process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS = 1;
+		delete process.env.JAVA_HOME;
 	});
 
 	afterEach(function () {
 		process.env.JAVA_HOME = this.JAVA_HOME;
 		process.env.PATH      = this.PATH;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS;
 		jdklib.resetCache();
 	});
 
 	it('should detect JDK using defaults', function (done) {
 		this.timeout(10000);
 		this.slow(5000);
+
+		this.JAVA_HOME && (process.env.JAVA_HOME = this.JAVA_HOME);
+		this.PATH      && (process.env.PATH      = this.PATH);
+		delete process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS;
 
 		jdklib
 			.detect()
@@ -57,15 +78,14 @@ describe('detect()', () => {
 			.catch(done);
 	});
 
-	it('should detect JDK using mock JDK', done => {
+	it('should detect JDK using single mock JDK', done => {
 		jdklib
 			.detect({
 				force: true,
-				ignorePlatformPaths: true,
 				paths: [
 					path.join(__dirname, 'mocks', 'jdk-1.8'),
-					'/Users/chris/Desktop',
-					'/Users/chris/doesnotexist'
+					__dirname,
+					'/Users/griswald/doesnotexist'
 				]
 			})
 			.then(results => {
@@ -75,11 +95,10 @@ describe('detect()', () => {
 			.catch(done);
 	});
 
-	it('should detect JDK using mock JDKs', done => {
+	it('should detect JDK using multiple mock JDKs', done => {
 		jdklib
 			.detect({
 				force: true,
-				ignorePlatformPaths: true,
 				paths: path.join(__dirname, 'mocks')
 			})
 			.then(results => {
@@ -93,7 +112,6 @@ describe('detect()', () => {
 		jdklib
 			.detect({
 				force: true,
-				ignorePlatformPaths: true,
 				paths: path.join(__dirname, 'mocks', 'empty')
 			})
 			.then(results => {
@@ -108,7 +126,6 @@ describe('detect()', () => {
 		jdklib
 			.detect({
 				force: true,
-				ignorePlatformPaths: true,
 				paths: path.join(__dirname, 'mocks', 'incomplete-jdk')
 			})
 			.then(results => {
@@ -123,7 +140,6 @@ describe('detect()', () => {
 		jdklib
 			.detect({
 				force: true,
-				ignorePlatformPaths: true,
 				paths: path.join(__dirname, 'mocks', 'bad-bin-jdk')
 			})
 			.then(results => {
@@ -138,7 +154,6 @@ describe('detect()', () => {
 		jdklib
 			.detect({
 				force: true,
-				ignorePlatformPaths: true,
 				paths: path.join(__dirname, 'mocks', 'jdk-1.8-32bit')
 			})
 			.then(results => {
@@ -151,7 +166,7 @@ describe('detect()', () => {
 	it('should find mock jdk via JAVA_HOME environment variable', done => {
 		process.env.JAVA_HOME = path.join(__dirname, 'mocks', 'jdk-1.8');
 		jdklib
-			.detect({ force: true, ignorePlatformPaths: true })
+			.detect({ force: true })
 			.then(results => {
 				validateResults(results, ['1.8.0_92']);
 				done();
@@ -162,7 +177,7 @@ describe('detect()', () => {
 	it('should not find a JDK when JAVA_HOME points to a file', done => {
 		process.env.JAVA_HOME = __filename;
 		jdklib
-			.detect({ force: true, ignorePlatformPaths: true })
+			.detect({ force: true })
 			.then(results => {
 				expect(results).to.be.an.Array;
 				expect(results).to.have.lengthOf(0);
@@ -174,7 +189,7 @@ describe('detect()', () => {
 	it('should find mock jdk via javac in the PATH', done => {
 		process.env.PATH = path.join(__dirname, 'mocks', 'jdk-1.8', 'bin');
 		jdklib
-			.detect({ force: true, ignorePlatformPaths: true })
+			.detect({ force: true })
 			.then(results => {
 				validateResults(results, ['1.8.0_92']);
 				done();
@@ -186,7 +201,6 @@ describe('detect()', () => {
 		jdklib
 			.detect({
 				force: true,
-				ignorePlatformPaths: true,
 				paths: __filename
 			})
 			.then(results => {
@@ -201,7 +215,6 @@ describe('detect()', () => {
 		const tmp = temp.mkdirSync('jdklib-test-');
 		const opts = {
 			force: true,
-			ignorePlatformPaths: true,
 			paths: [
 				path.join(__dirname, 'mocks', 'jdk-1.8'),
 				tmp
@@ -244,7 +257,6 @@ describe('detect()', () => {
 
 		const opts = {
 			force: true,
-			ignorePlatformPaths: true,
 			paths: path.join(__dirname, 'mocks', 'jdk-1.8')
 		};
 
@@ -266,14 +278,12 @@ describe('detect()', () => {
 		const opts1 = {
 			force: true,
 			gawk: true,
-			ignorePlatformPaths: true,
 			paths: path.join(__dirname, 'mocks', 'jdk-1.8')
 		};
 
 		const opts2 = {
 			force: true,
 			gawk: true,
-			ignorePlatformPaths: true,
 			paths: path.join(__dirname, 'mocks', 'jdk-1.7')
 		};
 
@@ -297,7 +307,6 @@ describe('detect()', () => {
 		const opts = {
 			force: true,
 			gawk: true,
-			ignorePlatformPaths: true,
 			paths: tmp
 		};
 
@@ -340,7 +349,7 @@ describe('detect()', () => {
 
 	it('should handle error when jdk paths is not an array of strings', done => {
 		jdklib
-			.detect({ ignorePlatformPaths: true, paths: [ 123 ] })
+			.detect({ paths: [ 123 ] })
 			.then(results => {
 				done(new Error('Expected rejection'));
 			})
@@ -357,7 +366,7 @@ describe('detect()', () => {
 
 	it('should strip empty jdk paths', done => {
 		jdklib
-			.detect({ ignorePlatformPaths: true, paths: [ '' ] })
+			.detect({ paths: [ '' ] })
 			.then(results => {
 				expect(results).to.have.lengthOf(0);
 				done();
@@ -372,12 +381,14 @@ describe('watch()', () => {
 		this.PATH             = process.env.PATH;
 		process.env.JAVA_HOME = '';
 		process.env.PATH      = tempPATH;
+		process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS = 1;
 		this.watcher          = null;
 	});
 
 	afterEach(function () {
 		process.env.JAVA_HOME = this.JAVA_HOME;
 		process.env.PATH      = this.PATH;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS;
 		this.watcher && this.watcher.stop();
 		jdklib.resetCache();
 	});
@@ -386,12 +397,20 @@ describe('watch()', () => {
 		this.timeout(10000);
 		this.slow(5000);
 
+		this.JAVA_HOME && (process.env.JAVA_HOME = this.JAVA_HOME);
+		this.PATH      && (process.env.PATH      = this.PATH);
+		delete process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS;
+
 		this.watcher = jdklib
 			.watch()
 			.on('results', results => {
-				validateResults(results);
-				this.watcher.stop();
-				done();
+				try {
+					this.watcher.stop();
+					validateResults(results);
+					done();
+				} catch (e) {
+					done(e);
+				}
 			})
 			.on('error', done);
 	});
@@ -403,7 +422,6 @@ describe('watch()', () => {
 		const tmp = temp.mkdirSync('jdklib-test-');
 		const opts = {
 			force: true,
-			ignorePlatformPaths: true,
 			paths: [
 				path.join(__dirname, 'mocks', 'jdk-1.8'),
 				tmp
@@ -415,17 +433,22 @@ describe('watch()', () => {
 		this.watcher = jdklib
 			.watch(opts)
 			.on('results', results => {
-				count++;
-				if (count === 1) {
-					validateResults(results, ['1.8.0_92']);
-					fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), tmp);
-				} else if (count === 2) {
-					validateResults(results, ['1.7.0_80', '1.8.0_92']);
-					del.sync([tmp], { force: true });
-				} else if (count === 3) {
+				try {
+					count++;
+					if (count === 1) {
+						validateResults(results, ['1.8.0_92']);
+						fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), tmp);
+					} else if (count === 2) {
+						validateResults(results, ['1.7.0_80', '1.8.0_92']);
+						del.sync([tmp], { force: true });
+					} else if (count === 3) {
+						this.watcher.stop();
+						validateResults(results, ['1.8.0_92']);
+						done();
+					}
+				} catch (e) {
 					this.watcher.stop();
-					validateResults(results, ['1.8.0_92']);
-					done();
+					done(e);
 				}
 			})
 			.on('error', done);
@@ -438,7 +461,6 @@ describe('watch()', () => {
 		const tmp = temp.mkdirSync('jdklib-test-');
 		const opts = {
 			force: true,
-			ignorePlatformPaths: true,
 			paths: [
 				path.join(__dirname, 'mocks', 'jdk-1.8'),
 				tmp
@@ -452,14 +474,18 @@ describe('watch()', () => {
 		this.watcher = jdklib
 			.watch(opts)
 			.on('results', results => {
-				count++;
-				if (count === 1) {
-					validateResults(results, ['1.7.0_80', '1.8.0_92']);
-					del.sync([tmp], { force: true });
-				} else if (count === 2) {
-					validateResults(results, ['1.8.0_92']);
-					this.watcher.stop();
-					done();
+				try {
+					count++;
+					if (count === 1) {
+						validateResults(results, ['1.7.0_80', '1.8.0_92']);
+						del.sync([tmp], { force: true });
+					} else if (count === 2) {
+						this.watcher.stop();
+						validateResults(results, ['1.8.0_92']);
+						done();
+					}
+				} catch (e) {
+					done(e);
 				}
 			})
 			.on('error', done);
@@ -472,7 +498,6 @@ describe('watch()', () => {
 		const tmp = temp.mkdirSync('jdklib-test-');
 		const opts = {
 			gawk: true,
-			ignorePlatformPaths: true,
 			paths: tmp
 		};
 
@@ -491,21 +516,25 @@ describe('watch()', () => {
 		this.watcher = jdklib
 			.watch(opts)
 			.on('results', results => {
-				expect(results).to.be.instanceof(GawkArray);
-				if (gobj === null) {
-					validateResults(results.toJS(), ['1.8.0_92']);
-					gobj = results;
-					const unwatch = results.watch(_.debounce(evt => {
-						try {
-							unwatch();
-							validateResults(evt.source.toJS(), ['1.7.0_80']);
-							checkDone();
-						} catch (err) {
-							checkDone(err);
-						}
-					}));
-					del.sync([ path.join(tmp, 'jdk-1.8') ], { force: true });
-					fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), path.join(tmp, 'jdk-1.7'));
+				try {
+					expect(results).to.be.instanceof(appc.gawk.GawkArray);
+					if (gobj === null) {
+						validateResults(results.toJS(), ['1.8.0_92']);
+						gobj = results;
+						const unwatch = results.watch(_.debounce(evt => {
+							try {
+								unwatch();
+								validateResults(evt.source.toJS(), ['1.7.0_80']);
+								checkDone();
+							} catch (err) {
+								checkDone(err);
+							}
+						}));
+						del.sync([ path.join(tmp, 'jdk-1.8') ], { force: true });
+						fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), path.join(tmp, 'jdk-1.7'));
+					}
+				} catch (e) {
+					checkDone(e);
 				}
 			})
 			.on('error', checkDone);
@@ -513,7 +542,7 @@ describe('watch()', () => {
 
 	it('should handle error when jdk paths is invalid', function (done) {
 		this.watcher = jdklib
-			.watch({ ignorePlatformPaths: true, paths: [ 123 ] })
+			.watch({ paths: [ 123 ] })
 			.on('results', results => {
 				this.watcher.stop();
 				done(new Error('Expected error to be emitted'));

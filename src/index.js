@@ -1,7 +1,6 @@
 import _ from 'lodash';
 import appc from 'node-appc';
 import fs from 'fs';
-import { GawkArray, GawkObject } from 'gawk';
 import path from 'path';
 
 if (!Error.prepareStackTrace) {
@@ -9,17 +8,19 @@ if (!Error.prepareStackTrace) {
 }
 
 /**
- * The scanner instance used to scan paths and cache per-path results returned
- * by the detectFn `isJDK()`.
- * @type {Scanner}
- */
-const scanner = new appc.detect.Scanner;
-
-/**
- * A map of the hash of the JDK paths or watch uuid to the resulting GawkArray.
+ * Common JDK install locations.
  * @type {Object}
  */
-const cache = {};
+const platformPaths = {
+	darwin: [
+		'/Library/Java/JavaVirtualMachines',
+		'/System/Library/Java/JavaVirtualMachines'
+	],
+	linux: [
+		'/usr/lib/jvm'
+	]
+	// note: for Windows, we check the Windows Registry
+};
 
 /**
  * Common search paths for the JVM library. This is used only for validating if
@@ -48,34 +49,46 @@ const libjvmLocations = {
 };
 
 /**
+ * The detection engine instance.
+ * @type {Engine}
+ */
+const engine = new appc.detect.Engine({
+	checkDir:       checkDir,
+	depth:          1,
+	env:            'JAVA_HOME',
+	exe:            `javac${appc.subprocess.exe}`,
+	multiple:       true,
+	processResults: processResults,
+	registryKeys:   scanRegistry,
+	paths:          platformPaths[process.platform]
+});
+
+/**
  * Resets the internal detection result cache. This is intended for testing
  * purposes.
  */
 export function resetCache() {
-	for (const key of Object.keys(cache)) {
-		delete cache[key];
-	}
-	scanner.cache = {};
+	engine.cache = {};
 }
 
 /**
  * JDK information object.
  */
-export class JDK extends GawkObject {
+export class JDK extends appc.gawk.GawkObject {
 	constructor(dir) {
 		if (typeof dir !== 'string' || !dir) {
 			throw new TypeError('Expected directory to be a valid string');
 		}
 
 		dir = appc.path.expand(dir);
-		if (!appc.fs.existsSync(dir)) {
+		if (!appc.fs.isDir(dir)) {
 			throw new Error('Directory does not exist');
 		}
 
 		// on OS X, the JDK lives in Contents/Home
 		if (process.platform === 'darwin') {
 			const p = path.join(dir, 'Contents', 'Home');
-			if (appc.fs.existsSync(p)) {
+			if (appc.fs.isDir(p)) {
 				dir = p;
 			}
 		}
@@ -96,7 +109,7 @@ export class JDK extends GawkObject {
 
 		if (!['java', 'javac', 'keytool', 'jarsigner'].every(cmd => {
 			const p = path.join(dir, 'bin', cmd + appc.subprocess.exe);
-			if (appc.fs.existsSync(p)) {
+			if (appc.fs.isFile(p)) {
 				values.executables[cmd] = fs.realpathSync(p);
 				return true;
 			}
@@ -147,110 +160,37 @@ export class JDK extends GawkObject {
  * Detects installed JDKs.
  *
  * @param {Object} [opts] - An object with various params.
- * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
- * well known platform specific paths.
+ * @param {Boolean} [opts.force=false] - When true, bypasses cache and
+ * re-detects the JDKs.
+ * @param {Boolan} [opts.gawk=false] - If true, returns the raw internal
+ * `GawkArray`, otherwise returns a JavaScript array.
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
- * @param {Boolan} [opts.gawk] - If true, returns the raw internal GawkArray,
- * otherwise returns a JavaScript array.
  * @returns {Promise} Resolves an object or GawkObject containing the values.
  */
 export function detect(opts = {}) {
-	return Promise.resolve()
-		.then(() => getPathInfo(opts))
-		.then(pathInfo => {
-			return scanner.scan({ paths: pathInfo.paths, force: opts.force, detectFn: isJDK, depth: 1 })
-				.then(results => processJDKs(results, appc.util.sha1(JSON.stringify(pathInfo.paths)), pathInfo.defaultPath));
-		})
-		.then(results => opts.gawk ? results : results.toJS());
+	return new Promise((resolve, reject) => {
+		engine
+			.detect(opts)
+			.on('results', resolve)
+			.on('error', reject);
+	});
 }
 
 /**
  * Detects installed JDKs and watches for changes.
  *
  * @param {Object} [opts] - An object with various params.
- * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
- * well known platform specific paths.
+ * @param {Boolean} [opts.force=false] - When true, bypasses cache and
+ * re-detects the JDKs.
+ * @param {Boolan} [opts.gawk=false] - If true, returns the raw internal
+ * `GawkArray`, otherwise returns a JavaScript array.
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
- * @param {Boolan} [opts.gawk] - If true, returns the raw internal GawkArray,
- * otherwise returns a JavaScript array.
- * @param {Number} [opts.pathRescanInterval=30000] - The number of milliseconds
- * to check if the search paths have changed. This is used on only Windows.
  * @returns {WatchHandle}
  */
 export function watch(opts = {}) {
-	const handle = new appc.detect.WatchHandle;
-	const uuid = appc.util.randomBytes(10);
-	const pathRescanInterval = Math.max(~~opts.pathRescanInterval || 5000, 1000);
-	let lastPathInfo = null;
-	let timer = null;
-	let jdks = null;
-
-	handle.unwatchers.set('__clearPathRescanTimer__', () => {
-		clearTimeout(timer);
-		timer = null;
-	});
-
-	function rescan(pathInfo) {
-		const lookup = {};
-
-		for (const dir of pathInfo.paths) {
-			lookup[dir] = 1;
-			if (!handle.unwatchers.has(dir)) {
-				handle.unwatchers.set(dir, appc.fs.watch(dir, _.debounce(evt => {
-					scanner.scan({ paths: pathInfo.paths, onlyPaths: [dir], force: true, detectFn: isJDK, depth: 1 })
-						.then(results => processJDKs(results, uuid, pathInfo.defaultPath))
-						.catch(err => {
-							handle.stop();
-							handle.emit('error', err);
-						});
-				})));
-			}
-		}
-
-		for (const dir of handle.unwatchers.keys()) {
-			if (dir !== '__clearPathRescanTimer__' && !lookup[dir]) {
-				handle.unwatchers.delete(dir);
-			}
-		}
-
-		if (!lastPathInfo || (lastPathInfo.paths < pathInfo.paths || lastPathInfo.paths > pathInfo.paths)) {
-			// need force a scan
-			scanner.scan({ paths: pathInfo.paths, force: true, detectFn: isJDK, depth: 1 })
-				.then(results => processJDKs(results, uuid, pathInfo.defaultPath))
-				.then(results => {
-					if (!jdks) {
-						jdks = results;
-						jdks.watch(evt => {
-							handle.emit('results', opts.gawk ? results : results.toJS());
-						});
-						handle.emit('results', opts.gawk ? jdks : jdks.toJS());
-					}
-				})
-				.catch(err => {
-					handle.stop();
-					handle.emit('error', err);
-				});
-		} else if (lastPathInfo.defaultPath !== pathInfo.defaultPath) {
-			// only need to update the default jdk
-			processJDKs(jdks._value, uuid, pathInfo.defaultPath);
-		}
-
-		lastPathInfo = pathInfo;
-
-		if (process.platform === 'win32') {
-			timer = setTimeout(() => getPathInfo(opts).then(rescan), pathRescanInterval);
-		}
-	}
-
-	Promise.resolve()
-		.then(() => getPathInfo(opts))
-		.then(rescan)
-		.catch(err => {
-			handle.stop();
-			handle.emit('error', err);
-		});
-
-	return handle;
+	opts.watch = true;
+	return engine
+		.detect(opts);
 }
 
 /**
@@ -260,44 +200,43 @@ export function watch(opts = {}) {
  * @param {String} dir - The directory to check.
  * @returns {Promise}
  */
-function isJDK(dir) {
+function checkDir(dir) {
 	return Promise.resolve()
-		.then(() => new JDK(dir))
-		.then(jdk => jdk.init())
+		.then(() => new JDK(dir).init())
 		.catch(err => Promise.resolve());
 }
 
 /**
- * Processes the array of discovered JDKs. It sorts the JDKs by version, selects
- * which JDK is the "default", and stores the new result in the cache.
+ * Sorts the results and assigns a default.
  *
- * @param {Array<JDK>} list - An array containing zero or more JDK objects.
- * @param {String} uuid - Used to cache results.
- * @param {String} [defaultPath] - The path to select as the default.
- * @returns {Promise} Resolves a GawkArray containing the JDKs.
+ * @param {Array} results - An array of results.
+ * @param {*} previousValue - The previous value or `undefined` if there is no
+ * previous value.
+ * @param {Engine} engine - The detect engine instance.
  */
-function processJDKs(list, uuid, defaultPath) {
-	let cachedValue = cache[uuid];
+function processResults(results, previousValue, engine) {
 	let foundDefault = false;
 
-	list.sort((a, b) => {
-		let r = appc.version.compare(a.get('version').toJS(), b.get('version').toJS());
-		if (r !== 0) {
-			return r;
-		}
+	if (results.length > 1) {
+		results.sort((a, b) => {
+			let r = appc.version.compare(a.get('version').toJS(), b.get('version').toJS());
+			if (r !== 0) {
+				return r;
+			}
 
-		r = (a.get('build').toJS() || 0) - (b.get('build').toJS() || 0);
-		if (r !== 0) {
-			return r;
-		}
+			r = (a.get('build').toJS() || 0) - (b.get('build').toJS() || 0);
+			if (r !== 0) {
+				return r;
+			}
 
-		return a.get('architecture').toJS().localeCompare(b.get('architecture').toJS());
-	});
+			return a.get('architecture').toJS().localeCompare(b.get('architecture').toJS());
+		});
+	}
 
 	// loop over all of the new JDKs and set default version and copy the gawk
 	// watchers
-	for (const jdk of list) {
-		if (defaultPath && jdk.get('path').toJS() === defaultPath) {
+	for (const jdk of results) {
+		if (engine.defaultPath && jdk.get('path').toJS() === engine.defaultPath) {
 			jdk.set('default', true);
 			foundDefault = true;
 		} else {
@@ -306,8 +245,8 @@ function processJDKs(list, uuid, defaultPath) {
 
 		// since we're going to overwrite the cached GawkArray with a new one,
 		// we need to copy over the watchers for existing watched GawkObjects
-		if (cachedValue) {
-			for (const cachedJDK of cachedValue._value) {
+		if (previousValue instanceof appc.gawk.GawkObject) {
+			for (const cachedJDK of previousValue._value) {
 				if (cachedJDK.get('version') === jdk.get('version') && cachedJDK.get('build') === jdk.get('build')) {
 					jdk._watchers = cachedJDK._watchers;
 					break;
@@ -317,106 +256,48 @@ function processJDKs(list, uuid, defaultPath) {
 	}
 
 	// no javac found the system path, so just select the last one as the default
-	if (!foundDefault && list.length) {
+	if (!foundDefault && results.length) {
 		// pick the newest
-		list[list.length-1].set('default', true);
+		results[results.length-1].set('default', true);
 	}
-
-	// if we don't have a destination GawkArray for these results, create and
-	// cache it
-	if (!cachedValue) {
-		cachedValue = cache[uuid] = new GawkArray;
-	}
-
-	// replace the internal array of the GawkArray and manually trigger the hash
-	// to be regenerated and listeners to be notified
-	cachedValue._value = list;
-	cachedValue.notify();
-
-	return cachedValue;
 }
 
 /**
- * Returns an array of search paths.
+ * Scans the Windows Registry for JDK paths to search.
  *
- * @param {Object} [opts] - Various options.
- * @param {Boolean} [opts.ignorePlatformPaths=false] - When true, doesn't search
- * well known platform specific paths.
- * @param {Array} [opts.paths] - One or more paths to known JDKs.
- * @returns {Promise} Resolves array of paths.
+ * @returns {Promise} Resolves object containing an array of paths and a default
+ * path.
  */
-function getPathInfo(opts) {
-	return Promise.resolve()
-		.then(() => {
-			if (opts.ignorePlatformPaths) {
-				return [];
-			}
-
-			if (process.platform === 'linux') {
-				return Promise.resolve({
-					paths: ['/usr/lib/jvm']
-				});
-			}
-
-			if (process.platform === 'darwin') {
-				return Promise.resolve({
-					paths: [
-						'/Library/Java/JavaVirtualMachines',
-						'/System/Library/Java/JavaVirtualMachines'
-					]
-				});
-			}
-
-			if (process.platform === 'win32') {
-				const results = {};
-				const scanRegistry = key => {
-					// try to get the current version, but if this fails, no biggie
-					return appc.windows.registry.get('HKLM', key, 'CurrentVersion')
-						.then(currentVersion => currentVersion && `${key}\\${currentVersion}`)
-						.catch(err => Promise.resolve())
-						.then(defaultKey => {
-							// get all subkeys which should only be valid JDKs
-							return appc.windows.registry.keys('HKLM', key)
-								.then(keys => Promise.all(keys.map(key => {
-									return appc.windows.registry.get('HKLM', key, 'JavaHome')
-										.then(javaHome => {
-											if (javaHome && !results[javaHome]) {
-												results[javaHome] = key === defaultKey;
-											}
-										})
-										.catch(err => Promise.resolve());
-								})));
-						})
-						.catch(err => Promise.resolve());
-				};
-
-				return Promise
-					.all([
-						scanRegistry('\\Software\\JavaSoft\\Java Development Kit'),
-						scanRegistry('\\Software\\Wow6432Node\\JavaSoft\\Java Development Kit')
-					])
-					.then(() => ({
-						paths: Object.keys(results),
-						defaultPath: Object.keys(results).filter(key => results[key])[0]
-					}));
-			}
-
-			return [];
-		})
-		.then(platformPaths => {
-			let defaultPath = platformPaths.defaultPath;
-			return Promise.resolve()
-				.then(() => {
-					if (!defaultPath) {
-						return appc.subprocess.which('javac' + appc.subprocess.exe)
-							.then(javac => (defaultPath = path.dirname(path.dirname(javac))))
+function scanRegistry() {
+	const results = {};
+	const scanRegistry = key => {
+		// try to get the current version, but if this fails, no biggie
+		return appc.windows.registry.get('HKLM', key, 'CurrentVersion')
+			.then(currentVersion => currentVersion && `${key}\\${currentVersion}`)
+			.catch(err => Promise.resolve())
+			.then(defaultKey => {
+				// get all subkeys which should only be valid JDKs
+				return appc.windows.registry.keys('HKLM', key)
+					.then(keys => Promise.all(keys.map(key => {
+						return appc.windows.registry.get('HKLM', key, 'JavaHome')
+							.then(javaHome => {
+								if (javaHome && !results[javaHome]) {
+									results[javaHome] = key === defaultKey;
+								}
+							})
 							.catch(err => Promise.resolve());
-					}
-				})
-				.then(() => appc.detect.getPaths({
-					env: 'JAVA_HOME',
-					paths: (platformPaths.paths || []).concat(opts.paths, defaultPath).filter(p => p)
-				}))
-				.then(paths => ({ paths, defaultPath }));
-		});
+					})));
+			})
+			.catch(err => Promise.resolve());
+	};
+
+	return Promise
+		.all([
+			scanRegistry('\\Software\\JavaSoft\\Java Development Kit'),
+			scanRegistry('\\Software\\Wow6432Node\\JavaSoft\\Java Development Kit')
+		])
+		.then(() => ({
+			paths: Object.keys(results),
+			defaultPath: Object.keys(results).filter(key => results[key])[0]
+		}));
 }
