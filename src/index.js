@@ -53,14 +53,15 @@ const libjvmLocations = {
  * @type {Engine}
  */
 const engine = new appc.detect.Engine({
-	checkDir:       checkDir,
-	depth:          1,
-	env:            'JAVA_HOME',
-	exe:            `javac${appc.subprocess.exe}`,
-	multiple:       true,
-	processResults: processResults,
-	registryKeys:   scanRegistry,
-	paths:          platformPaths[process.platform]
+	checkDir:             checkDir,
+	depth:                1,
+	env:                  'JAVA_HOME',
+	exe:                  `javac${appc.subprocess.exe}`,
+	multiple:             true,
+	processResults:       processResults,
+	registryKeys:         scanRegistry,
+	registryPollInterval: 15000,
+	paths:                platformPaths[process.platform]
 });
 
 /**
