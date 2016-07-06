@@ -44,6 +44,8 @@ describe('detect()', () => {
 		this.PATH             = process.env.PATH;
 		process.env.PATH      = tempPATH;
 		process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS = 1;
+		process.env.NODE_APPC_SKIP_GLOBAL_ENVIRONMENT_PATHS = 1;
+		process.env.NODE_APPC_SKIP_GLOBAL_EXECUTABLE_PATH = 1;
 		delete process.env.JAVA_HOME;
 	});
 
@@ -51,6 +53,8 @@ describe('detect()', () => {
 		process.env.JAVA_HOME = this.JAVA_HOME;
 		process.env.PATH      = this.PATH;
 		delete process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_ENVIRONMENT_PATHS;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_EXECUTABLE_PATH;
 		jdklib.resetCache();
 	});
 
@@ -61,6 +65,8 @@ describe('detect()', () => {
 		this.JAVA_HOME && (process.env.JAVA_HOME = this.JAVA_HOME);
 		this.PATH      && (process.env.PATH      = this.PATH);
 		delete process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_ENVIRONMENT_PATHS;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_EXECUTABLE_PATH;
 
 		jdklib
 			.detect()
@@ -382,6 +388,8 @@ describe('watch()', () => {
 		process.env.JAVA_HOME = '';
 		process.env.PATH      = tempPATH;
 		process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS = 1;
+		process.env.NODE_APPC_SKIP_GLOBAL_ENVIRONMENT_PATHS = 1;
+		process.env.NODE_APPC_SKIP_GLOBAL_EXECUTABLE_PATH = 1;
 		this.watcher          = null;
 	});
 
@@ -389,6 +397,8 @@ describe('watch()', () => {
 		process.env.JAVA_HOME = this.JAVA_HOME;
 		process.env.PATH      = this.PATH;
 		delete process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_ENVIRONMENT_PATHS;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_EXECUTABLE_PATH;
 		this.watcher && this.watcher.stop();
 		jdklib.resetCache();
 	});
@@ -400,6 +410,8 @@ describe('watch()', () => {
 		this.JAVA_HOME && (process.env.JAVA_HOME = this.JAVA_HOME);
 		this.PATH      && (process.env.PATH      = this.PATH);
 		delete process.env.NODE_APPC_SKIP_GLOBAL_SEARCH_PATHS;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_ENVIRONMENT_PATHS;
+		delete process.env.NODE_APPC_SKIP_GLOBAL_EXECUTABLE_PATH;
 
 		this.watcher = jdklib
 			.watch()

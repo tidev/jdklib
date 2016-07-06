@@ -67,9 +67,15 @@ const engine = new appc.detect.Engine({
 /**
  * Resets the internal detection result cache. This is intended for testing
  * purposes.
+ *
+ * @param {Boolean} [reinit=false] - When true, the detect will re-initialize
+ * during the next detect call.
  */
-export function resetCache() {
+export function resetCache(reinit) {
 	engine.cache = {};
+	if (reinit) {
+		engine.initialized = false;
+	}
 }
 
 /**
@@ -234,29 +240,29 @@ function processResults(results, previousValue, engine) {
 		});
 	}
 
-	// loop over all of the new JDKs and set default version and copy the gawk
+	// loop over all of the new results and set default version and copy the gawk
 	// watchers
-	for (const jdk of results) {
-		if (engine.defaultPath && jdk.get('path').toJS() === engine.defaultPath) {
-			jdk.set('default', true);
+	for (const result of results) {
+		if (engine.defaultPath && result.get('path').toJS() === engine.defaultPath) {
+			result.set('default', true);
 			foundDefault = true;
 		} else {
-			jdk.set('default', false);
+			result.set('default', false);
 		}
 
 		// since we're going to overwrite the cached GawkArray with a new one,
 		// we need to copy over the watchers for existing watched GawkObjects
 		if (previousValue instanceof appc.gawk.GawkObject) {
-			for (const cachedJDK of previousValue._value) {
-				if (cachedJDK.get('version') === jdk.get('version') && cachedJDK.get('build') === jdk.get('build')) {
-					jdk._watchers = cachedJDK._watchers;
+			for (const cachedResult of previousValue._value) {
+				if (cachedResult.get('version') === result.get('version') && cachedResult.get('build') === result.get('build')) {
+					result._watchers = cachedResult._watchers;
 					break;
 				}
 			}
 		}
 	}
 
-	// no javac found the system path, so just select the last one as the default
+	// no default found the system path, so just select the last one as the default
 	if (!foundDefault && results.length) {
 		// pick the newest
 		results[results.length-1].set('default', true);
