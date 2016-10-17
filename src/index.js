@@ -281,6 +281,7 @@ function scanRegistry() {
 	const results = {};
 	const scanRegistry = key => {
 		// try to get the current version, but if this fails, no biggie
+		log('Checking Windows registry for JavaHome paths');
 		return appc.windows.registry.get('HKLM', key, 'CurrentVersion')
 			.then(currentVersion => currentVersion && `${key}\\${currentVersion}`)
 			.catch(err => Promise.resolve())
@@ -291,6 +292,7 @@ function scanRegistry() {
 						return appc.windows.registry.get('HKLM', key, 'JavaHome')
 							.then(javaHome => {
 								if (javaHome && !results[javaHome]) {
+									log(`Found JavaHome: ${javaHome}`);
 									results[javaHome] = key === defaultKey;
 								}
 							})
