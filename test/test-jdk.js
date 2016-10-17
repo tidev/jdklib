@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import appc from 'node-appc';
 import del from 'del';
 import { expect } from 'chai';
@@ -331,7 +330,7 @@ describe('detect()', () => {
 			.then(results => {
 				validateResults(results.toJS(), ['1.8.0_92']);
 
-				const unwatch = results.watch(_.debounce(evt => {
+				const unwatch = results.watch(appc.util.debounce(evt => {
 					try {
 						unwatch();
 						validateResults(evt.source.toJS(), ['1.7.0_80']);
@@ -533,7 +532,7 @@ describe('watch()', () => {
 					if (gobj === null) {
 						validateResults(results.toJS(), ['1.8.0_92']);
 						gobj = results;
-						const unwatch = results.watch(_.debounce(evt => {
+						const unwatch = results.watch(appc.util.debounce(evt => {
 							try {
 								unwatch();
 								validateResults(evt.source.toJS(), ['1.7.0_80']);

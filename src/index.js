@@ -1,11 +1,13 @@
-import _ from 'lodash';
 import appc from 'node-appc';
+import debug from 'debug';
 import fs from 'fs';
 import path from 'path';
 
 if (!Error.prepareStackTrace) {
 	require('source-map-support/register');
 }
+
+const log = debug('jdklib');
 
 /**
  * Common JDK install locations.
@@ -192,7 +194,7 @@ export function detect(opts = {}) {
  * @param {Boolan} [opts.gawk=false] - If true, returns the raw internal
  * `GawkArray`, otherwise returns a JavaScript array.
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
- * @returns {WatchHandle}
+ * @returns {Handle}
  */
 export function watch(opts = {}) {
 	opts.watch = true;
