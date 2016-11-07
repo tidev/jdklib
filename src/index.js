@@ -62,7 +62,7 @@ const engine = new appc.detect.Engine({
 	multiple:             true,
 	processResults:       processResults,
 	registryKeys:         scanRegistry,
-	registryPollInterval: 15000,
+	registryPollInterval: 5000,
 	paths:                platformPaths[process.platform]
 });
 
@@ -141,7 +141,7 @@ export class JDK extends appc.gawk.GawkObject {
 		}
 
 		// try the 64-bit version first
-		return appc.subprocess.run(javac, ['-version', '-d64'])
+		return appc.subprocess.run(javac, ['-d64', '-version'])
 			.then(({ stdout, stderr }) => {
 				// 64-bit version
 				return { output: stderr, arch: '64bit' };
@@ -149,8 +149,8 @@ export class JDK extends appc.gawk.GawkObject {
 			.catch(err => {
 				// try the 32-bit version
 				return appc.subprocess.run(javac, ['-version'])
-					.then(({ code, stdout, stderr }) => {
-						return { output: stderr, arch: '32bit' };
+					.then(({ stdout, stderr }) => {
+						return { output: stderr, arch: err.code === 2 ? '64bit' : '32bit' };
 					});
 			})
 			.then(({ output, arch }) => {
@@ -198,6 +198,7 @@ export function detect(opts = {}) {
  */
 export function watch(opts = {}) {
 	opts.watch = true;
+	opts.redetect = true;
 	return engine
 		.detect(opts);
 }
@@ -281,7 +282,6 @@ function scanRegistry() {
 	const results = {};
 	const scanRegistry = key => {
 		// try to get the current version, but if this fails, no biggie
-		log('Checking Windows registry for JavaHome paths');
 		return appc.windows.registry.get('HKLM', key, 'CurrentVersion')
 			.then(currentVersion => currentVersion && `${key}\\${currentVersion}`)
 			.catch(err => Promise.resolve())
@@ -291,7 +291,7 @@ function scanRegistry() {
 					.then(keys => Promise.all(keys.map(key => {
 						return appc.windows.registry.get('HKLM', key, 'JavaHome')
 							.then(javaHome => {
-								if (javaHome && !results[javaHome]) {
+								if (javaHome && !results.hasOwnProperty(javaHome)) {
 									log(`Found JavaHome: ${javaHome}`);
 									results[javaHome] = key === defaultKey;
 								}
@@ -301,6 +301,8 @@ function scanRegistry() {
 			})
 			.catch(err => Promise.resolve());
 	};
+
+	log('Checking Windows registry for JavaHome paths');
 
 	return Promise
 		.all([
