@@ -135,7 +135,7 @@ export class JDK extends appc.gawk.GawkObject {
 	 * @returns {Promise}
 	 */
 	init() {
-		const javac = this.get(['executables', 'javac']).toJS();
+		const javac = this.executables.javac;
 		if (!javac) {
 			return Promise.resolve();
 		}
@@ -171,8 +171,6 @@ export class JDK extends appc.gawk.GawkObject {
  * @param {Object} [opts] - An object with various params.
  * @param {Boolean} [opts.force=false] - When true, bypasses cache and
  * re-detects the JDKs.
- * @param {Boolan} [opts.gawk=false] - If true, returns the raw internal
- * `GawkArray`, otherwise returns a JavaScript array.
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
  * @returns {Promise} Resolves an object or GawkObject containing the values.
  */
@@ -191,8 +189,6 @@ export function detect(opts = {}) {
  * @param {Object} [opts] - An object with various params.
  * @param {Boolean} [opts.force=false] - When true, bypasses cache and
  * re-detects the JDKs.
- * @param {Boolan} [opts.gawk=false] - If true, returns the raw internal
- * `GawkArray`, otherwise returns a JavaScript array.
  * @param {Array} [opts.paths] - One or more paths to known JDKs.
  * @returns {Handle}
  */
@@ -227,48 +223,49 @@ function checkDir(dir) {
 function processResults(results, previousValue, engine) {
 	let foundDefault = false;
 
+	// sort the results
 	if (results.length > 1) {
 		results.sort((a, b) => {
-			let r = appc.version.compare(a.get('version').toJS(), b.get('version').toJS());
+			let r = appc.version.compare(a.version, b.version);
 			if (r !== 0) {
 				return r;
 			}
 
-			r = (a.get('build').toJS() || 0) - (b.get('build').toJS() || 0);
+			r = (a.build || 0) - (b.build || 0);
 			if (r !== 0) {
 				return r;
 			}
 
-			return a.get('architecture').toJS().localeCompare(b.get('architecture').toJS());
+			return a.architecture.localeCompare(b.architecture);
 		});
 	}
 
 	// loop over all of the new results and set default version and copy the gawk
 	// watchers
 	for (const result of results) {
-		if (engine.defaultPath && result.get('path').toJS() === engine.defaultPath) {
-			result.set('default', true);
+		if (engine.defaultPath && result.path === engine.defaultPath) {
+			result.default = true;
 			foundDefault = true;
 		} else {
-			result.set('default', false);
+			result.default = false;
 		}
 
 		// since we're going to overwrite the cached GawkArray with a new one,
 		// we need to copy over the watchers for existing watched GawkObjects
-		if (previousValue instanceof appc.gawk.GawkObject) {
-			for (const cachedResult of previousValue._value) {
-				if (cachedResult.get('version') === result.get('version') && cachedResult.get('build') === result.get('build')) {
-					result._watchers = cachedResult._watchers;
-					break;
-				}
-			}
-		}
+		// if (previousValue instanceof appc.gawk.GawkObject) {
+		// 	for (const cachedResult of previousValue) {
+		// 		if (cachedResult.version === result.version && cachedResult.build === result.build) {
+		// 			result._watchers = cachedResult._watchers;
+		// 			break;
+		// 		}
+		// 	}
+		// }
 	}
 
 	// no default found the system path, so just select the last one as the default
 	if (!foundDefault && results.length) {
 		// pick the newest
-		results[results.length-1].set('default', true);
+		results[results.length-1].default = true;
 	}
 }
 

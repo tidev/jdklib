@@ -279,16 +279,14 @@ describe('detect()', () => {
 			.catch(done);
 	});
 
-	it('should return unique gawk objects for different paths', done => {
+	it('should return unique objects for different paths', done => {
 		const opts1 = {
 			force: true,
-			gawk: true,
 			paths: path.join(__dirname, 'mocks', 'jdk-1.8')
 		};
 
 		const opts2 = {
 			force: true,
-			gawk: true,
 			paths: path.join(__dirname, 'mocks', 'jdk-1.7')
 		};
 
@@ -306,12 +304,11 @@ describe('detect()', () => {
 			.catch(done);
 	});
 
-	it('should return a gawk objects and receive updates', done => {
+	it('should return receive updates', done => {
 		const tmp = temp.mkdirSync('jdklib-test-');
 
 		const opts = {
 			force: true,
-			gawk: true,
 			paths: tmp
 		};
 
@@ -328,17 +325,19 @@ describe('detect()', () => {
 		jdklib
 			.detect(opts)
 			.then(results => {
-				validateResults(results.toJS(), ['1.8.0_92']);
+				validateResults(results, ['1.8.0_92']);
 
-				const unwatch = results.watch(appc.util.debounce(evt => {
+				const listener = appc.util.debounce(garr => {
 					try {
-						unwatch();
-						validateResults(evt.source.toJS(), ['1.7.0_80']);
+						appc.gawk.gawk.unwatch(results, listener);
+						validateResults(garr, ['1.7.0_80']);
 						checkDone();
 					} catch (err) {
 						checkDone(err);
 					}
-				}));
+				});
+
+				appc.gawk.gawk.watch(results, listener);
 			})
 			.then(() => {
 				del.sync([ path.join(tmp, 'jdk-1.8') ], { force: true });
@@ -346,7 +345,7 @@ describe('detect()', () => {
 				return jdklib.detect(opts);
 			})
 			.then(results => {
-				validateResults(results.toJS(), ['1.7.0_80']);
+				validateResults(results, ['1.7.0_80']);
 				checkDone();
 			})
 			.catch(checkDone);
@@ -530,17 +529,18 @@ describe('watch()', () => {
 				try {
 					expect(results).to.be.instanceof(appc.gawk.GawkArray);
 					if (gobj === null) {
-						validateResults(results.toJS(), ['1.8.0_92']);
+						validateResults(results, ['1.8.0_92']);
 						gobj = results;
-						const unwatch = results.watch(appc.util.debounce(evt => {
+						const listener = appc.util.debounce(garr => {
 							try {
-								unwatch();
-								validateResults(evt.source.toJS(), ['1.7.0_80']);
+								appc.gawk.gawk.unwatch(results, listener);
+								validateResults(garr, ['1.7.0_80']);
 								checkDone();
 							} catch (err) {
 								checkDone(err);
 							}
-						}));
+						});
+						appc.gawk.gawk.watch(results, listener);
 						del.sync([ path.join(tmp, 'jdk-1.8') ], { force: true });
 						fs.copySync(path.join(__dirname, 'mocks', 'jdk-1.7'), path.join(tmp, 'jdk-1.7'));
 					}
