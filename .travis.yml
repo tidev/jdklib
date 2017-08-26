@@ -1,12 +1,15 @@
 language: node_js
 node_js:
-  - "4"
-  - "5"
   - "6"
-os:
-  - linux
+  - "7"
+  - "8"
+os: linux
 sudo: false
-before_script:
-  - sh -c "git log | head -12"
-script:
-  - npm run coverage
+before_install:
+  - curl -o- -L https://yarnpkg.com/install.sh | bash -s -- --version 0.27.5
+  - export PATH=$HOME/.yarn/bin:$PATH
+cache:
+  yarn: true
+install: yarn
+before_script: sh -c "git log | head -12"
+script: yarn run coverage

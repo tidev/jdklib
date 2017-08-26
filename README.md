@@ -58,7 +58,7 @@ subsequent submissions.
 
 This project is open source and provided under the Apache Public License (version 2). Please make sure you see the LICENSE file included in this distribution for more details on the license. Also, please take notice of the privacy notice at the end of the file.
 
-(C) Copyright 2016, [Appcelerator, Inc](http://www.appcelerator.com) All Rights Reserved.
+(C) Copyright 2016-2017, [Axway, Inc](http://www.appcelerator.com) All Rights Reserved.
 
 [npm-image]: https://img.shields.io/npm/v/jdklib.svg
 [npm-url]: https://npmjs.org/package/jdklib
