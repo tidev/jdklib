@@ -1,6 +1,6 @@
 {
   "name": "jdklib",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "JDK utility library",
   "main": "./dist/index.js",
   "author": "Axway, Inc. <npmjs@appcelerator.com>",
@@ -22,18 +22,18 @@
     "test": "gulp test"
   },
   "dependencies": {
-    "snooplogg": "^1.7.1",
-    "source-map-support": "^0.4.16"
-  },
-  "devDependencies": {
     "appcd-fs": "^0.1.0",
     "appcd-path": "^0.1.0",
     "appcd-subprocess": "^0.1.0",
-    "babel-eslint": "^7.2.3",
-    "babel-plugin-istanbul": "^4.1.4",
+    "snooplogg": "^1.8.0",
+    "source-map-support": "^0.5.0"
+  },
+  "devDependencies": {
+    "babel-eslint": "^8.0.1",
+    "babel-plugin-istanbul": "^4.1.5",
     "babel-plugin-transform-es2015-modules-commonjs": "^6.26.0",
     "babel-register": "^6.26.0",
-    "chai": "^4.1.1",
+    "chai": "^4.1.2",
     "del": "^3.0.0",
     "esdoc-es7-plugin": "^0.0.3",
     "eslint-plugin-security": "^1.4.0",
@@ -45,10 +45,10 @@
     "gulp-load-plugins": "^1.5.0",
     "gulp-plumber": "^1.1.0",
     "gulp-util": "^3.0.8",
-    "mocha": "^3.5.0",
-    "nyc": "^11.1.0",
-    "sinon": "^3.2.1",
-    "sinon-chai": "^2.13.0",
+    "mocha": "^4.0.1",
+    "nyc": "^11.2.1",
+    "sinon": "^4.0.1",
+    "sinon-chai": "^2.14.0",
     "tmp": "^0.0.33"
   },
   "homepage": "https://github.com/appcelerator/jdklib",
