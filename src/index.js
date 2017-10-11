@@ -11,7 +11,7 @@ import { isDir, isFile } from 'appcd-fs';
 import { expandPath, real } from 'appcd-path';
 import { exe, run } from 'appcd-subprocess';
 
-const { log, error } = snooplogg.config({ theme: 'detailed' })('jdklib');
+const { log } = snooplogg.config({ theme: 'detailed' })('jdklib');
 const { highlight } = snooplogg.styles;
 
 /**
@@ -68,13 +68,11 @@ export default class JDK {
 	 */
 	constructor(dir) {
 		if (typeof dir !== 'string' || !dir) {
-			error('Directory is not a valid string');
 			throw new TypeError('Expected directory to be a valid string');
 		}
 
 		dir = expandPath(dir);
 		if (!isDir(dir)) {
-			error('Directory does not exist: %s', highlight(dir));
 			throw new Error('Directory does not exist');
 		}
 
@@ -88,7 +86,6 @@ export default class JDK {
 
 		const libjvms = libjvmLocations[process.platform];
 		if (!libjvms || !libjvms.some(p => isFile(path.resolve(dir, p)))) {
-			error('Directory missing JVM library: %s', dir);
 			throw new Error('Directory missing JVM library');
 		}
 
@@ -105,7 +102,6 @@ export default class JDK {
 				return true;
 			}
 		})) {
-			error('Directory missing required program: %s', dir);
 			throw new Error('Directory missing required program');
 		}
 
