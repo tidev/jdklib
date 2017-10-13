@@ -3,7 +3,6 @@ if (!Error.prepareStackTrace) {
 	require('source-map-support/register');
 }
 
-import fs from 'fs';
 import path from 'path';
 import snooplogg from 'snooplogg';
 
@@ -95,12 +94,13 @@ export default class JDK {
 		this.path        = dir;
 		this.version     = null;
 
-		if (!['java', 'javac', 'keytool', 'jarsigner'].every(cmd => {
+		if (![ 'java', 'javac', 'keytool', 'jarsigner' ].every(cmd => {
 			const p = path.join(dir, 'bin', cmd + exe);
 			if (isFile(p)) {
 				this.executables[cmd] = real(p);
 				return true;
 			}
+			return false;
 		})) {
 			throw new Error('Directory missing required program');
 		}
@@ -122,8 +122,8 @@ export default class JDK {
 		}
 
 		// try the 64-bit version first
-		return run(javac, ['-d64', '-version'])
-			.then(({ stdout, stderr }) => {
+		return run(javac, [ '-d64', '-version' ])
+			.then(({ stderr }) => {
 				// 64-bit version
 				log('javac is the 64-bit version');
 				return { output: stderr, arch: '64bit' };
@@ -132,8 +132,8 @@ export default class JDK {
 				// if err.code === 2, then we have the 64-bit version, but we must re-run javac to
 				// get the version since on Windows it doesn't print the version correctly
 				log(`javac is the ${err.code === 2 ? 64 : 32}-bit version`);
-				return run(javac, ['-version'])
-					.then(({ stdout, stderr }) => {
+				return run(javac, [ '-version' ])
+					.then(({ stderr }) => {
 						return { output: stderr, arch: err.code === 2 ? '64bit' : '32bit' };
 					});
 			})
