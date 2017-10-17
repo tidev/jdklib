@@ -13,6 +13,8 @@ import { exe, run } from 'appcd-subprocess';
 const { log } = snooplogg.config({ theme: 'detailed' })('jdklib');
 const { highlight } = snooplogg.styles;
 
+const re = /^javac (.+?)(?:_(.+))?$/;
+
 /**
  * Common JDK install locations.
  * @type {Object}
@@ -140,12 +142,7 @@ export default class JDK {
 					});
 			})
 			.then(async ({ stderr, stdout, arch }) => {
-				let m = stderr.trim().match(/^javac (.+?)(?:_(.+))?$/);
-				if (!m) {
-					// This is possibly a Java 9 install
-					// http://openjdk.java.net/jeps/223
-					m = stdout.match(/^javac (.+?)(?:_(.+))?$/);
-				}
+				const m = stderr.trim().match(re) || stdout.trim().match(re);
 				let build = m && parseInt(m[2]);
 				if (!build) {
 					const { stderr } = await run(this.executables.java, [ '-version' ]);
