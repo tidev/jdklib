@@ -153,6 +153,40 @@ describe('JDK', () => {
 			});
 	});
 
+	it('should detect JDK 9', () => {
+		const dir = path.join(__dirname, 'mocks', 'jdk-9');
+		return detect(dir)
+			.then(jdk => {
+				expect(jdk.arch).to.equal('64bit');
+				expect(jdk.build).to.equal(92);
+				expect(jdk.executables).to.deep.equal({
+					java:      path.join(dir, 'bin', 'java' + exe),
+					javac:     path.join(dir, 'bin', 'javac' + exe),
+					keytool:   path.join(dir, 'bin', 'keytool' + exe),
+					jarsigner: path.join(dir, 'bin', 'jarsigner' + exe)
+				});
+				expect(jdk.path).to.equal(dir);
+				expect(jdk.version).to.equal('9');
+			});
+	});
+
+	it('should detect JDK 9 with macOS pathing', () => {
+		const dir = path.join(__dirname, 'mocks', 'jdk-9-darwin');
+		return detect(dir)
+			.then(jdk => {
+				expect(jdk.arch).to.equal('64bit');
+				expect(jdk.build).to.equal(92);
+				expect(jdk.executables).to.deep.equal({
+					java:      path.join(dir, 'Contents', 'Home', 'bin', 'java' + exe),
+					javac:     path.join(dir, 'Contents', 'Home', 'bin', 'javac' + exe),
+					keytool:   path.join(dir, 'Contents', 'Home', 'bin', 'keytool' + exe),
+					jarsigner: path.join(dir, 'Contents', 'Home', 'bin', 'jarsigner' + exe)
+				});
+				expect(jdk.path).to.equal(path.join(dir, 'Contents', 'Home'));
+				expect(jdk.version).to.equal('1.8.0');
+			});
+	});
+
 	it('should not detect version or arch if javac is not found', () => {
 		const dir = path.join(__dirname, 'mocks', 'bad-bin-jdk');
 		const jdk = new JDK(dir);
