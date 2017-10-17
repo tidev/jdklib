@@ -4,14 +4,14 @@ if (!Error.prepareStackTrace) {
 }
 
 import path from 'path';
-import snooplogg from 'snooplogg';
+import appcdLogger from 'appcd-logger';
 
 import { isDir, isFile } from 'appcd-fs';
 import { expandPath, real } from 'appcd-path';
 import { exe, run } from 'appcd-subprocess';
 
-const { log } = snooplogg.config({ theme: 'detailed' })('jdklib');
-const { highlight } = snooplogg.styles;
+const { log } = appcdLogger('jdklib');
+const { highlight } = appcdLogger.styles;
 
 const re = /^javac (.+?)(?:_(.+))?$/;
 

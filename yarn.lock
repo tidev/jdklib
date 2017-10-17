@@ -109,9 +109,9 @@ appcd-fs@0.1.0, appcd-fs@^0.1.0:
   dependencies:
     source-map-support "^0.4.16"
 
-appcd-gulp@^0.1.1:
-  version "0.1.2"
-  resolved "https://registry.yarnpkg.com/appcd-gulp/-/appcd-gulp-0.1.2.tgz#c6b0d9b2fd55278abfd4410078803d346538f705"
+appcd-gulp@^0.1.3:
+  version "0.1.3"
+  resolved "https://registry.yarnpkg.com/appcd-gulp/-/appcd-gulp-0.1.3.tgz#21d50e5b75c562da1ba1a452b1aaacb7c9da9ae6"
   dependencies:
     babel-eslint "^8.0.1"
     babel-plugin-dynamic-import-node "^1.1.0"
@@ -146,7 +146,7 @@ appcd-gulp@^0.1.1:
     sinon "^4.0.1"
     sinon-chai "^2.14.0"
 
-appcd-logger@0.1.0:
+appcd-logger@0.1.0, appcd-logger@^0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/appcd-logger/-/appcd-logger-0.1.0.tgz#f4bf70c87560fcf7f09a4c7eb9cbd007b4f3f4ed"
   dependencies:

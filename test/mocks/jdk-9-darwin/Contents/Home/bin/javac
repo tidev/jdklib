@@ -1,2 +1,2 @@
 #!/bin/sh
-echo "javac 9"
+echo "javac 9.0.1"
