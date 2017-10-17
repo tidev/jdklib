@@ -1,33 +1,9 @@
 import JDK, { detect } from '../dist/index';
 
-import fs from 'fs-extra';
 import path from 'path';
-import tmp from 'tmp';
-
-import { expandPath, real } from 'appcd-path';
 import { exe } from 'appcd-subprocess';
 
-const _tmpDir = tmp.dirSync({
-	prefix: 'jdklib-test-',
-	unsafeCleanup: true
-}).name;
-const tmpDir = real(_tmpDir);
-
-function makeTempName() {
-	return path.join(_tmpDir, Math.random().toString(36).substring(7));
-}
-
-function makeTempDir() {
-	const dir = makeTempName();
-	fs.mkdirsSync(dir);
-	return dir;
-}
-
 describe('JDK', () => {
-	after(function () {
-		fs.removeSync(tmpDir);
-	});
-
 	it('should throw error if dir is not a string', () => {
 		expect(() => {
 			new JDK();
@@ -136,7 +112,7 @@ describe('JDK', () => {
 			});
 	});
 
-	it('should detect JDK 1.8 64-bit with macOS pathing', () => {
+	(process.platform === 'darwin' ? it : it.skip)('should detect JDK 1.8 64-bit with macOS pathing', () => {
 		const dir = path.join(__dirname, 'mocks', 'jdk-1.8-darwin');
 		return detect(dir)
 			.then(jdk => {
@@ -158,7 +134,7 @@ describe('JDK', () => {
 		return detect(dir)
 			.then(jdk => {
 				expect(jdk.arch).to.equal('64bit');
-				expect(jdk.build).to.equal(92);
+				expect(jdk.build).to.equal(181);
 				expect(jdk.executables).to.deep.equal({
 					java:      path.join(dir, 'bin', 'java' + exe),
 					javac:     path.join(dir, 'bin', 'javac' + exe),
@@ -170,12 +146,12 @@ describe('JDK', () => {
 			});
 	});
 
-	it('should detect JDK 9 with macOS pathing', () => {
+	(process.platform === 'darwin' ? it : it.skip)('should detect JDK 9 with macOS pathing', () => {
 		const dir = path.join(__dirname, 'mocks', 'jdk-9-darwin');
 		return detect(dir)
 			.then(jdk => {
 				expect(jdk.arch).to.equal('64bit');
-				expect(jdk.build).to.equal(92);
+				expect(jdk.build).to.equal(181);
 				expect(jdk.executables).to.deep.equal({
 					java:      path.join(dir, 'Contents', 'Home', 'bin', 'java' + exe),
 					javac:     path.join(dir, 'Contents', 'Home', 'bin', 'javac' + exe),
