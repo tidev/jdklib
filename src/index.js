@@ -117,7 +117,7 @@ export default class JDK {
 	 * @returns {Promise}
 	 * @access public
 	 */
-	init() {
+	async init() {
 		const javac = this.executables.javac;
 		if (!javac) {
 			log('No javac found, skipping version detection');
@@ -139,15 +139,21 @@ export default class JDK {
 						return { stderr, stdout,  arch: err.code === 2 ? '64bit' : '32bit' };
 					});
 			})
-			.then(({ stderr, stdout, arch }) => {
-				let m = stderr.match(/javac (.+)_(.+)/);
+			.then(async ({ stderr, stdout, arch }) => {
+				let m = stderr.trim().match(/^javac (.+?)(?:_(.+))?$/);
 				if (!m) {
 					// This is possibly a Java 9 install
 					// http://openjdk.java.net/jeps/223
-					m = stdout.match(/javac ([1-9][0-9]*((\.0)*\.[1-9][0-9]*)*)/);
+					m = stdout.match(/^javac (.+?)(?:_(.+))?$/);
+				}
+				let build = m && parseInt(m[2]);
+				if (!build) {
+					const { stderr } = await run(this.executables.java, [ '-version' ]);
+					const m = stderr.trim().match(/\(build .+?\+(\d+)\)/);
+					build = m && parseInt(m[1]);
 				}
 				this.version = m && m[1] || null;
-				this.build = m && parseInt(m[2]) || null;
+				this.build = build;
 				this.arch = arch;
 				return this;
 			})
