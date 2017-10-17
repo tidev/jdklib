@@ -151,7 +151,7 @@ describe('JDK', () => {
 		return detect(dir)
 			.then(jdk => {
 				expect(jdk.arch).to.equal('64bit');
-				expect(jdk.build).to.equal(181);
+				expect(jdk.build).to.equal(11);
 				expect(jdk.executables).to.deep.equal({
 					java:      path.join(dir, 'Contents', 'Home', 'bin', 'java' + exe),
 					javac:     path.join(dir, 'Contents', 'Home', 'bin', 'javac' + exe),
@@ -159,7 +159,7 @@ describe('JDK', () => {
 					jarsigner: path.join(dir, 'Contents', 'Home', 'bin', 'jarsigner' + exe)
 				});
 				expect(jdk.path).to.equal(path.join(dir, 'Contents', 'Home'));
-				expect(jdk.version).to.equal('1.8.0');
+				expect(jdk.version).to.equal('9.0.1');
 			});
 	});
 
