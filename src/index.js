@@ -3,7 +3,6 @@ if (!Error.prepareStackTrace) {
 	require('source-map-support/register');
 }
 
-import fs from 'fs';
 import path from 'path';
 import snooplogg from 'snooplogg';
 
@@ -13,6 +12,8 @@ import { exe, run } from 'appcd-subprocess';
 
 const { log } = snooplogg.config({ theme: 'detailed' })('jdklib');
 const { highlight } = snooplogg.styles;
+
+const re = /^javac (.+?)(?:_(.+))?$/;
 
 /**
  * Common JDK install locations.
@@ -43,15 +44,18 @@ export const libjvmLocations = {
 		'jre/lib/amd64/client/libjvm.so',
 		'jre/lib/amd64/server/libjvm.so',
 		'jre/lib/i386/client/libjvm.so',
-		'jre/lib/i386/server/libjvm.so'
+		'jre/lib/i386/server/libjvm.so',
+		'lib/server/libjvm.so'
 	],
 	darwin: [
 		'jre/lib/server/libjvm.dylib',
-		'../Libraries/libjvm.dylib'
+		'../Libraries/libjvm.dylib',
+		'lib/server/libjvm.dylib'
 	],
 	win32: [
 		'jre/bin/server/jvm.dll',
-		'jre/bin/client/jvm.dll'
+		'jre/bin/client/jvm.dll',
+		'bin/server/jvm.dll'
 	]
 };
 
@@ -95,12 +99,13 @@ export default class JDK {
 		this.path        = dir;
 		this.version     = null;
 
-		if (!['java', 'javac', 'keytool', 'jarsigner'].every(cmd => {
+		if (![ 'java', 'javac', 'keytool', 'jarsigner' ].every(cmd => {
 			const p = path.join(dir, 'bin', cmd + exe);
 			if (isFile(p)) {
 				this.executables[cmd] = real(p);
 				return true;
 			}
+			return false;
 		})) {
 			throw new Error('Directory missing required program');
 		}
@@ -114,33 +119,38 @@ export default class JDK {
 	 * @returns {Promise}
 	 * @access public
 	 */
-	init() {
+	async init() {
 		const javac = this.executables.javac;
 		if (!javac) {
 			log('No javac found, skipping version detection');
 			return Promise.resolve(this);
 		}
-
 		// try the 64-bit version first
-		return run(javac, ['-d64', '-version'])
-			.then(({ stdout, stderr }) => {
+		return run(javac, [ '-d64', '-version' ])
+			.then(({ stderr, stdout }) => {
 				// 64-bit version
 				log('javac is the 64-bit version');
-				return { output: stderr, arch: '64bit' };
+				return { stderr, stdout, arch: '64bit' };
 			})
 			.catch(err => {
 				// if err.code === 2, then we have the 64-bit version, but we must re-run javac to
 				// get the version since on Windows it doesn't print the version correctly
 				log(`javac is the ${err.code === 2 ? 64 : 32}-bit version`);
-				return run(javac, ['-version'])
+				return run(javac, [ '-version' ])
 					.then(({ stdout, stderr }) => {
-						return { output: stderr, arch: err.code === 2 ? '64bit' : '32bit' };
+						return { stderr, stdout,  arch: err.code === 2 ? '64bit' : '32bit' };
 					});
 			})
-			.then(({ output, arch }) => {
-				const m = output.match(/javac (.+)_(.+)/);
+			.then(async ({ stderr, stdout, arch }) => {
+				const m = stderr.trim().match(re) || stdout.trim().match(re);
+				let build = m && parseInt(m[2]);
+				if (!build) {
+					const { stderr } = await run(this.executables.java, [ '-version' ]);
+					const m = stderr.trim().match(/\(build .+?\+(\d+)\)/);
+					build = m && parseInt(m[1]);
+				}
 				this.version = m && m[1] || null;
-				this.build = m && parseInt(m[2]) || null;
+				this.build = build;
 				this.arch = arch;
 				return this;
 			})
