@@ -42,15 +42,18 @@ export const libjvmLocations = {
 		'jre/lib/amd64/client/libjvm.so',
 		'jre/lib/amd64/server/libjvm.so',
 		'jre/lib/i386/client/libjvm.so',
-		'jre/lib/i386/server/libjvm.so'
+		'jre/lib/i386/server/libjvm.so',
+		'lib/server/libjvm.so'
 	],
 	darwin: [
 		'jre/lib/server/libjvm.dylib',
-		'../Libraries/libjvm.dylib'
+		'../Libraries/libjvm.dylib',
+		'lib/server/libjvm.dylib'
 	],
 	win32: [
 		'jre/bin/server/jvm.dll',
-		'jre/bin/client/jvm.dll'
+		'jre/bin/client/jvm.dll',
+		'bin/server/jvm.dll'
 	]
 };
 
@@ -120,25 +123,29 @@ export default class JDK {
 			log('No javac found, skipping version detection');
 			return Promise.resolve(this);
 		}
-
 		// try the 64-bit version first
 		return run(javac, [ '-d64', '-version' ])
-			.then(({ stderr }) => {
+			.then(({ stderr, stdout }) => {
 				// 64-bit version
 				log('javac is the 64-bit version');
-				return { output: stderr, arch: '64bit' };
+				return { stderr, stdout, arch: '64bit' };
 			})
 			.catch(err => {
 				// if err.code === 2, then we have the 64-bit version, but we must re-run javac to
 				// get the version since on Windows it doesn't print the version correctly
 				log(`javac is the ${err.code === 2 ? 64 : 32}-bit version`);
 				return run(javac, [ '-version' ])
-					.then(({ stderr }) => {
-						return { output: stderr, arch: err.code === 2 ? '64bit' : '32bit' };
+					.then(({ stdout, stderr }) => {
+						return { stderr, stdout,  arch: err.code === 2 ? '64bit' : '32bit' };
 					});
 			})
-			.then(({ output, arch }) => {
-				const m = output.match(/javac (.+)_(.+)/);
+			.then(({ stderr, stdout, arch }) => {
+				let m = stderr.match(/javac (.+)_(.+)/);
+				if (!m) {
+					// This is possibly a Java 9 install
+					// http://openjdk.java.net/jeps/223
+					m = stdout.match(/javac ([1-9][0-9]*((\.0)*\.[1-9][0-9]*)*)/);
+				}
 				this.version = m && m[1] || null;
 				this.build = m && parseInt(m[2]) || null;
 				this.arch = arch;
