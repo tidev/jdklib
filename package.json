@@ -1,6 +1,6 @@
 {
   "name": "jdklib",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "JDK utility library",
   "main": "./dist/index.js",
   "author": "Axway, Inc. <npmjs@appcelerator.com>",
@@ -39,6 +39,6 @@
     "url": "git://github.com/appcelerator/jdklib.git"
   },
   "engines": {
-    "node": ">=4.0.0"
+    "node": ">=6.0.0"
   }
 }
