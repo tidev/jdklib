@@ -1,5 +1,6 @@
 import JDK, { detect } from '../dist/index';
 
+import fs from 'fs';
 import path from 'path';
 import { exe } from 'appcd-subprocess';
 
@@ -25,7 +26,11 @@ describe('JDK', () => {
 	});
 
 	it('should error if dir is missing the JVM library', () => {
-		return detect(path.join(__dirname, 'mocks', 'empty'))
+		const mockDir = path.join(__dirname, 'mocks', 'empty');
+		if (!fs.existsSync(mockDir)) {
+			fs.mkdirSync(mockDir);
+		}
+		return detect(mockDir)
 			.then(() => {
 				throw new Error('Expected error');
 			}, err => {
