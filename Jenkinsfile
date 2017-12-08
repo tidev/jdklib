@@ -59,7 +59,7 @@ timestamps {
       isMaster = env.BRANCH_NAME.equals('master')
       packageVersion = jsonParse(readFile('package.json'))['version']
       currentBuild.displayName = "#${packageVersion}-${currentBuild.number}"
-      stash name: 'sources', includes: '**', allowEmpty: true
+      stash allowEmpty: true, name: 'sources', useDefaultExcludes: false
     }
   }
 
