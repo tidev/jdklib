@@ -54,11 +54,13 @@ your email address in your first pull request so that we can make sure that will
 locate your CLA.  Once you've submitted it, you no longer need to send one for
 subsequent submissions.
 
-## License
+## Legal
 
-This project is open source and provided under the Apache Public License (version 2). Please make sure you see the LICENSE file included in this distribution for more details on the license. Also, please take notice of the privacy notice at the end of the file.
+This project is open source under the [Apache Public License v2][1] and is developed by
+[Axway, Inc](http://www.axway.com/) and the community. Please read the [`LICENSE`][1] file included
+in this distribution for more information.
 
-(C) Copyright 2016-2017, [Axway, Inc](http://www.appcelerator.com) All Rights Reserved.
+[1]: https://github.com/appcelerator/androidlib/blob/master/LICENSE
 
 [npm-image]: https://img.shields.io/npm/v/jdklib.svg
 [npm-url]: https://npmjs.org/package/jdklib

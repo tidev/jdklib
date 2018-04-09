@@ -6,11 +6,12 @@
 .git*
 .nyc_output
 .travis.yml
-coverage
-docs
+/coverage
+/docs
 gulpfile.js
+junit.xml
 node_modules
 npm-debug.log
 yarn-error.log
-src
-test
+/src
+/test
