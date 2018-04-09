@@ -1,6 +1,6 @@
 {
   "name": "jdklib",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "JDK utility library",
   "main": "./dist/index.js",
   "author": "Axway, Inc. <npmjs@appcelerator.com>",
@@ -22,14 +22,14 @@
     "test": "gulp test"
   },
   "dependencies": {
-    "appcd-fs": "^1.0.0",
-    "appcd-logger": "^1.0.0",
-    "appcd-path": "^1.0.0",
-    "appcd-subprocess": "^1.0.0",
-    "source-map-support": "^0.5.0"
+    "appcd-fs": "^1.1.1",
+    "appcd-logger": "^1.1.0",
+    "appcd-path": "^1.1.0",
+    "appcd-subprocess": "^1.1.0",
+    "source-map-support": "^0.5.4"
   },
   "devDependencies": {
-    "appcd-gulp": "^1.0.0",
+    "appcd-gulp": "^1.1.2",
     "gulp": "^3.9.1"
   },
   "homepage": "https://github.com/appcelerator/jdklib",
