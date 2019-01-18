@@ -181,20 +181,18 @@ describe('JDK', () => {
 			});
 	});
 
-	it('should not detect version if javac is bad', () => {
+	it('should not detect version if javac is bad', async () => {
 		const dir = path.join(__dirname, 'mocks', 'bad-bin-jdk');
-		return detect(dir)
-			.then(jdk => {
-				expect(jdk.arch).to.be.null;
-				expect(jdk.build).to.be.null;
-				expect(jdk.executables).to.deep.equal({
-					java:      path.join(dir, 'bin', 'java' + exe),
-					javac:     path.join(dir, 'bin', 'javac' + exe),
-					keytool:   path.join(dir, 'bin', 'keytool' + exe),
-					jarsigner: path.join(dir, 'bin', 'jarsigner' + exe)
-				});
-				expect(jdk.path).to.equal(dir);
-				expect(jdk.version).to.be.null;
-			});
+		const jdk = await detect(dir);
+		expect(jdk.arch).to.be.null;
+		expect(jdk.build).to.be.null;
+		expect(jdk.executables).to.deep.equal({
+			java:      path.join(dir, 'bin', 'java' + exe),
+			javac:     path.join(dir, 'bin', 'javac' + exe),
+			keytool:   path.join(dir, 'bin', 'keytool' + exe),
+			jarsigner: path.join(dir, 'bin', 'jarsigner' + exe)
+		});
+		expect(jdk.path).to.equal(dir);
+		expect(jdk.version).to.be.null;
 	});
 });
