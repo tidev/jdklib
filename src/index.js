@@ -125,36 +125,40 @@ export default class JDK {
 			log('No javac found, skipping version detection');
 			return Promise.resolve(this);
 		}
-		// try the 64-bit version first
-		return run(javac, [ '-d64', '-version' ])
-			.then(({ stderr, stdout }) => {
-				// 64-bit version
+
+		// we do a nested try/catch because it's ok if this fails since our goal is to detect, not
+		// perform some task
+		try {
+			let stderr, stdout, arch;
+
+			try {
+				// try the 64-bit version first
+				({ stderr, stdout } = await run(javac, [ '-d64', '-version' ]));
 				log('javac is the 64-bit version');
-				return { stderr, stdout, arch: '64bit' };
-			})
-			.catch(err => {
+				arch = '64bit';
+			} catch (err) {
 				// if err.code === 2, then we have the 64-bit version, but we must re-run javac to
 				// get the version since on Windows it doesn't print the version correctly
+				({ stdout, stderr } = await run(javac, [ '-version' ]));
 				log(`javac is the ${err.code === 2 ? 64 : 32}-bit version`);
-				return run(javac, [ '-version' ])
-					.then(({ stdout, stderr }) => {
-						return { stderr, stdout,  arch: err.code === 2 ? '64bit' : '32bit' };
-					});
-			})
-			.then(async ({ stderr, stdout, arch }) => {
-				const m = stderr.trim().match(re) || stdout.trim().match(re);
-				let build = m && parseInt(m[2]);
-				if (!build) {
-					const { stderr } = await run(this.executables.java, [ '-version' ]);
-					const m = stderr.trim().match(/\(build .+?\+(\d+)\)/);
-					build = m && parseInt(m[1]);
-				}
-				this.version = m && m[1] || null;
-				this.build = build;
-				this.arch = arch;
-				return this;
-			})
-			.catch(() => this);
+				arch = err.code === 2 ? '64bit' : '32bit';
+			}
+
+			const m = stderr.trim().match(re) || stdout.trim().match(re);
+			let build = m && parseInt(m[2]);
+			if (!build) {
+				const { stderr } = await run(this.executables.java, [ '-version' ]);
+				const m = stderr.trim().match(/\(build .+?\+(\d+)\)/);
+				build = m && parseInt(m[1]);
+			}
+			this.version = m && m[1] || null;
+			this.build = build;
+			this.arch = arch;
+		} catch (err) {
+			// squelch
+		}
+
+		return this;
 	}
 }
 

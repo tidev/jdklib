@@ -1,3 +1,9 @@
+# v2.3.0 (Jan 18, 2019)
+
+ * Upgraded to Gulp 4.
+ * Refactored promises to async/await.
+ * Updated dependencies.
+
 # v2.2.1 (Apr 9, 2018)
 
  * Updated npm dependencies.
