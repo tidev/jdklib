@@ -1,6 +1,6 @@
 {
   "name": "jdklib",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "JDK utility library",
   "main": "./dist/index.js",
   "author": "Axway, Inc. <npmjs@appcelerator.com>",
@@ -23,9 +23,9 @@
   },
   "dependencies": {
     "appcd-fs": "^1.1.5",
-    "appcd-logger": "^1.1.4",
+    "appcd-logger": "^2.0.0",
     "appcd-path": "^1.1.4",
-    "appcd-subprocess": "^1.1.4",
+    "appcd-subprocess": "^1.2.0",
     "source-map-support": "^0.5.10"
   },
   "devDependencies": {
