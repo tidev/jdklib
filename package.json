@@ -1,6 +1,6 @@
 {
   "name": "jdklib",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "JDK utility library",
   "main": "./dist/index.js",
   "author": "Axway, Inc. <npmjs@appcelerator.com>",
