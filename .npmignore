@@ -9,6 +9,7 @@
 /coverage
 /docs
 gulpfile.js
+Jenkinsfile
 junit.xml
 node_modules
 npm-debug.log
