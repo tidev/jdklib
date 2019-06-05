@@ -1,20 +1,24 @@
+# v2.4.1 (Jun 5, 2019)
+
+ * chore: Updated dependencies.
+
 # v2.4.0 (Mar 29, 2019)
 
  * chore: Updated dependencies.
 
 # v2.3.1 (Jan 25, 2019)
 
- * Updated dependencies.
+ * chore: Updated dependencies.
 
 # v2.3.0 (Jan 18, 2019)
 
- * Upgraded to Gulp 4.
- * Refactored promises to async/await.
- * Updated dependencies.
+ * chore: Upgraded to Gulp 4.
+ * refactor: Refactored promises to async/await.
+ * chore: Updated dependencies.
 
 # v2.2.1 (Apr 9, 2018)
 
- * Updated npm dependencies.
+ * chore: Updated dependencies.
 
 # v2.2.0 (Dec 8, 2017)
 
