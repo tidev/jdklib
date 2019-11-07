@@ -22,14 +22,14 @@
     "test": "gulp test"
   },
   "dependencies": {
-    "appcd-fs": "^1.1.8",
-    "appcd-logger": "^2.0.3",
-    "appcd-path": "^1.1.7",
-    "appcd-subprocess": "^3.0.0",
-    "source-map-support": "^0.5.13"
+    "appcd-fs": "^1.1.9",
+    "appcd-logger": "^2.0.4",
+    "appcd-path": "^1.1.8",
+    "appcd-subprocess": "^3.0.1",
+    "source-map-support": "^0.5.16"
   },
   "devDependencies": {
-    "appcd-gulp": "^2.2.0"
+    "appcd-gulp": "^2.3.0"
   },
   "homepage": "https://github.com/appcelerator/jdklib",
   "bugs": "https://github.com/appcelerator/jdklib/issues",
