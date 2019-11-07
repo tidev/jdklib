@@ -1,3 +1,7 @@
+# v3.0.1 (Nov 7, 2019)
+
+ * chore: Updated dependencies.
+
 # v3.0.0 (Aug 14, 2019)
 
  * BREAKING CHANGE: Bumped minimum required Node.js version from v8.0.0 to v8.12.0.
