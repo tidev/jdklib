@@ -44,7 +44,7 @@ describe('JDK', () => {
 			});
 	});
 
-	it.only('should detect JDK 1.6', () => {
+	it('should detect JDK 1.6', () => {
 		const dir = path.join(__dirname, 'mocks', 'jdk-1.6');
 		return detect(dir)
 			.then(jdk => {
