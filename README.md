@@ -6,7 +6,7 @@
 [![Deps][david-image]][david-url]
 [![Dev Deps][david-dev-image]][david-dev-url]
 
-> Note: jdklib requires Node.js 4 or newer.
+> Note: jdklib requires Node.js 8.12.0 or newer.
 
 ## Installation
 
