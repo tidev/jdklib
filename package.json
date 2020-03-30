@@ -1,6 +1,6 @@
 {
   "name": "jdklib",
-  "version": "3.0.0",
+  "version": "3.0.2",
   "description": "JDK utility library",
   "main": "./dist/index.js",
   "author": "Axway, Inc. <npmjs@appcelerator.com>",
@@ -18,18 +18,19 @@
     "build": "gulp build",
     "coverage": "gulp coverage",
     "docs": "gulp docs",
+    "lint": "gulp lint",
     "prepare": "gulp build",
     "test": "gulp test"
   },
   "dependencies": {
-    "appcd-fs": "^1.1.8",
-    "appcd-logger": "^2.0.3",
-    "appcd-path": "^1.1.7",
-    "appcd-subprocess": "^3.0.0",
-    "source-map-support": "^0.5.13"
+    "appcd-fs": "^1.1.10",
+    "appcd-logger": "^2.0.5",
+    "appcd-path": "^1.1.9",
+    "appcd-subprocess": "^3.0.2",
+    "source-map-support": "^0.5.16"
   },
   "devDependencies": {
-    "appcd-gulp": "^2.2.0"
+    "appcd-gulp": "^2.3.1"
   },
   "homepage": "https://github.com/appcelerator/jdklib",
   "bugs": "https://github.com/appcelerator/jdklib/issues",
