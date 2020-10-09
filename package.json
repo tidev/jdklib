@@ -30,7 +30,7 @@
     "source-map-support": "^0.5.16"
   },
   "devDependencies": {
-    "appcd-gulp": "^2.3.1"
+    "appcd-gulp": "^3.0.1"
   },
   "homepage": "https://github.com/appcelerator/jdklib",
   "bugs": "https://github.com/appcelerator/jdklib/issues",
