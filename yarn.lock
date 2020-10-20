@@ -950,6 +950,13 @@ appcd-path@^1.1.9:
   dependencies:
     source-map-support "^0.5.16"
 
+appcd-path@^2.0.1:
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/appcd-path/-/appcd-path-2.0.1.tgz#50110a1acf60924869888c14527137917f86e44e"
+  integrity sha512-Az3KmtKO81mVF3QDNzNbVybbPixmPcrfp9yJmEdlBFw7jXY/ntPShxiMQMWR3bjkqhJYVaFKDqMlrTx+pB+7rw==
+  dependencies:
+    source-map-support "^0.5.19"
+
 appcd-request@^2.2.0:
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/appcd-request/-/appcd-request-2.2.0.tgz#2955e6d7fb060a13eae1a2978b30ef881ace10be"
@@ -6908,7 +6915,7 @@ source-map-resolve@^0.5.0, source-map-resolve@^0.5.2:
     source-map-url "^0.4.0"
     urix "^0.1.0"
 
-source-map-support@^0.5.16, source-map-support@~0.5.12:
+source-map-support@^0.5.16, source-map-support@^0.5.19, source-map-support@~0.5.12:
   version "0.5.19"
   resolved "https://registry.yarnpkg.com/source-map-support/-/source-map-support-0.5.19.tgz#a98b62f86dcaf4f67399648c085291ab9e8fed61"
   integrity sha512-Wonm7zOCIJzBGQdB+thsPar0kYuCIzYvxZwlBa87yi/Mdjv7Tip2cyVbLj5o0cFPN4EVkuTwb3GDDyUx2DGnGw==
