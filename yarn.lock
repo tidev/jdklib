@@ -815,9 +815,9 @@ appcd-logger@^3.0.1:
     source-map-support "^0.5.19"
 
 appcd-path@^2.0.1, appcd-path@^2.0.2:
-  version "2.0.2"
-  resolved "https://registry.yarnpkg.com/appcd-path/-/appcd-path-2.0.2.tgz#44775fe3e12dc635d483de2a257a336e29c2ab60"
-  integrity sha512-rrKbYefvQ+fYgad17LSGjCVFCJWEk/ChsFeGNpZkTtrKu3YrW0jMJC4YsuNdhsc8aMsrIIgVDcs9lQg2SnxjWA==
+  version "2.0.3"
+  resolved "https://registry.yarnpkg.com/appcd-path/-/appcd-path-2.0.3.tgz#e6c315fc7abb07a9c63193d9db8a5b0f2f5bf5ed"
+  integrity sha512-CuNo+9ghG+PhJiZpR1hJ86yzxjfCQpaIri7t3Xqk37+syYsNzAOpMBII6Iq9XJuQ1cr6eJBOnMi0Hw41C1SrQg==
   dependencies:
     source-map-support "^0.5.19"
 
